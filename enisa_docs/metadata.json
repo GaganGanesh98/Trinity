@@ -1,0 +1,126 @@
+{
+  "07c12111": {
+    "title": "ENISA Sectorial Threat Landscape - Public Administration",
+    "source_url": "https://www.enisa.europa.eu/publications/enisa-sectorial-threat-landscape-public-administration",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/2026-01/ENISA%20Public%20Administration%20TL%202024%20-%20v1.2.pdf",
+    "local_path": "enisa_docs/ENISA Sectorial Threat Landscape - Public Administration_07c12111.pdf",
+    "date": "2025-11-06T12:01:17+01:00",
+    "scraped_at": "2026-05-03T14:28:52.139019"
+  },
+  "52ed64de": {
+    "title": "ENISA Threat Landscape 2025",
+    "source_url": "https://www.enisa.europa.eu/publications/enisa-threat-landscape-2025",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/2026-01/ENISA%20Threat%20Landscape%202025_v1.2.pdf",
+    "local_path": "enisa_docs/ENISA Threat Landscape 2025_52ed64de.pdf",
+    "date": "2025-10-01T09:00:52+02:00",
+    "scraped_at": "2026-05-03T14:28:55.076363"
+  },
+  "5090d287": {
+    "title": "ENISA Cybersecurity Threat Landscape Methodology",
+    "source_url": "https://www.enisa.europa.eu/publications/enisa-cybersecurity-threat-landscape-methodology",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/2025-08/ENISA%20CTL%20Methodology_Updated%20August%202025.pdf",
+    "local_path": "enisa_docs/ENISA Cybersecurity Threat Landscape Methodology_5090d287.pdf",
+    "date": "2025-08-01T14:40:11+02:00",
+    "scraped_at": "2026-05-03T14:28:57.277614"
+  },
+  "a72d7a66": {
+    "title": "Cybersecurity roles and skills for NIS2 Essential and Important Entities",
+    "source_url": "https://www.enisa.europa.eu/publications/cybersecurity-roles-and-skills-for-nis2-essential-and-important-entities",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/2025-06/Mapping%20NIS%202%20obligations%20with%20ECSF%20role%20profiles.pdf",
+    "local_path": "enisa_docs/Cybersecurity roles and skills for NIS2 Essential and Important Entities_a72d7a66.pdf",
+    "date": "2025-06-26T12:00:32+02:00",
+    "scraped_at": "2026-05-03T14:28:59.424919"
+  },
+  "aa1fb031": {
+    "title": "NIS2 Technical Implementation Guidance",
+    "source_url": "https://www.enisa.europa.eu/publications/nis2-technical-implementation-guidance",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/2025-06/ENISA_Technical_implementation_guidance_on_cybersecurity_risk_management_measures_version_1.0.pdf",
+    "local_path": "enisa_docs/NIS2 Technical Implementation Guidance_aa1fb031.pdf",
+    "date": "2025-06-26T12:00:13+02:00",
+    "scraped_at": "2026-05-03T14:29:01.970848"
+  },
+  "dbc5ff07": {
+    "title": "ENISA Space Threat Landscape 2025",
+    "source_url": "https://www.enisa.europa.eu/publications/enisa-space-threat-landscape-2025",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/2025-03/Space_Threat_Landscape_Report_fin.pdf",
+    "local_path": "enisa_docs/ENISA Space Threat Landscape 2025_dbc5ff07.pdf",
+    "date": "2025-03-26T09:00:53+01:00",
+    "scraped_at": "2026-05-03T14:29:04.552015"
+  },
+  "5569a61a": {
+    "title": "ENISA Threat Landscape: Finance Sector",
+    "source_url": "https://www.enisa.europa.eu/publications/enisa-threat-landscape-finance-sector",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/2025-02/Finance%20TL%202024_Final.pdf",
+    "local_path": "enisa_docs/ENISA Threat Landscape_ Finance Sector_5569a61a.pdf",
+    "date": "2025-02-21T15:13:48+01:00",
+    "scraped_at": "2026-05-03T14:29:06.768181"
+  },
+  "8d271738": {
+    "title": "ENISA Threat Landscape 2024",
+    "source_url": "https://www.enisa.europa.eu/publications/enisa-threat-landscape-2024",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/2024-11/ENISA%20Threat%20Landscape%202024_0.pdf",
+    "local_path": "enisa_docs/ENISA Threat Landscape 2024_8d271738.pdf",
+    "date": "2024-09-19T02:00:00+02:00",
+    "scraped_at": "2026-05-03T14:29:10.193812"
+  },
+  "716abfca3c99": {
+    "title": "Multilayer Framework for Good Cybersecurity Practices for AI",
+    "source_url": "https://www.enisa.europa.eu/publications/multilayer-framework-for-good-cybersecurity-practices-for-ai",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/publications/Multilayer%20Framework%20for%20Good%20Cybersecurity%20Practices%20for%20AI.pdf",
+    "local_path": "enisa_docs/Multilayer Framework for Good Cybersecurity Practices for AI_716abfca3c99.pdf",
+    "date": "unknown",
+    "topics": [
+      "Artificial Intelligence and Next Gen Technologies",
+      "Awareness and Cyber Hygiene",
+      "Certification and Standards",
+      "Cyber Hygiene",
+      "Cyber Incident Awareness",
+      "Cyber Threats",
+      "Cybersecurity of Critical Sectors",
+      "Digital Identity and Data Protection",
+      "EU incident response and cyber crisis management",
+      "Education and career path",
+      "Incident management",
+      "Market",
+      "Product Security and Certification",
+      "Risk Management",
+      "Skills and competences",
+      "Skills and competences (for companies)",
+      "State of cybersecurity in the EU",
+      "Vulnerability Disclosure"
+    ],
+    "abstract": "ENISA is the EU agency dedicated to enhancing cybersecurity in Europe. They offer guidance, tools, and resources to safeguard citizens and businesses from cyber threats.",
+    "source_type": "seed",
+    "scraped_at": "2026-05-06T11:37:02.312225+00:00"
+  },
+  "02d10e09583b": {
+    "title": "Artificial Intelligence Cybersecurity Challenges",
+    "source_url": "https://www.enisa.europa.eu/publications/artificial-intelligence-cybersecurity-challenges",
+    "pdf_url": "https://www.enisa.europa.eu/sites/default/files/publications/ENISA%20Report%20-%20Artificial%20Intelligence%20Cybersecurity%20Challenges.pdf",
+    "local_path": "enisa_docs/Artificial Intelligence Cybersecurity Challenges_02d10e09583b.pdf",
+    "date": "unknown",
+    "topics": [
+      "Artificial Intelligence and Next Gen Technologies",
+      "Awareness and Cyber Hygiene",
+      "Certification and Standards",
+      "Cyber Hygiene",
+      "Cyber Incident Awareness",
+      "Cyber Threats",
+      "Cybersecurity of Critical Sectors",
+      "Digital Identity and Data Protection",
+      "EU incident response and cyber crisis management",
+      "Education and career path",
+      "Incident management",
+      "Market",
+      "Product Security and Certification",
+      "Risk Management",
+      "Skills and competences",
+      "Skills and competences (for companies)",
+      "State of cybersecurity in the EU",
+      "Vulnerability Disclosure"
+    ],
+    "abstract": "ENISA is the EU agency dedicated to enhancing cybersecurity in Europe. They offer guidance, tools, and resources to safeguard citizens and businesses from cyber threats.",
+    "source_type": "seed",
+    "scraped_at": "2026-05-06T11:37:06.757252+00:00"
+  }
+}

@@ -1,0 +1,21 @@
+# enisa-rag-agent
+
+Python scraping + RAG project.
+
+## Language
+- Python 3.11+; use type hints everywhere.
+
+## HTTP
+- All HTTP calls go through `scraper/fetcher.py` only.
+
+## Scraper / metadata
+- Metadata state lives in `enisa_docs/metadata.json` — never re-download if `uid` exists.
+
+## RAG
+- RAG logic lives in `rag/` only — do not mix with the scraper.
+
+## URLs
+- No hardcoded URLs outside `config.py`.
+
+## New sites
+- When adding new sites, add a new fetcher class; do not modify the ENISA fetcher.

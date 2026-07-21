@@ -1,0 +1,27 @@
+[
+  {
+    "question": "What are the main cybersecurity challenges for artificial intelligence systems according to ENISA?",
+    "expected_sources": ["Artificial Intelligence Cybersecurity Challenges"],
+    "expected_answer_contains": ["AI", "cybersecurity"]
+  },
+  {
+    "question": "What does the ENISA Multilayer Framework recommend for good cybersecurity practices in AI?",
+    "expected_sources": ["Multilayer Framework"],
+    "expected_answer_contains": ["AI", "cybersecurity"]
+  },
+  {
+    "question": "What are the top cyber threats identified in the ENISA Threat Landscape 2024?",
+    "expected_sources": ["Threat Landscape 2024"],
+    "expected_answer_contains": ["ransomware"]
+  },
+  {
+    "question": "What does NIS2 require for technical implementation of cybersecurity measures?",
+    "expected_sources": ["NIS2 Technical Implementation"],
+    "expected_answer_contains": ["NIS2"]
+  },
+  {
+    "question": "What cybersecurity threats affect the financial sector according to ENISA?",
+    "expected_sources": ["Finance Sector"],
+    "expected_answer_contains": ["finance"]
+  }
+]

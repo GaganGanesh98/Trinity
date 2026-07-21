@@ -1,0 +1,43 @@
+# Neo4j Community — local GRAPH store for the GraphRAG layer.
+# Free, runs entirely on your machine. No cloud account, no paid tier.
+#
+#   docker compose up -d neo4j     # start
+#   docker compose down            # stop (data persists in the named volume)
+#   docker compose down -v         # stop AND wipe the graph
+#
+# Browser UI:  http://localhost:7474   (bolt://localhost:7687)
+# Credentials come from .env (NEO4J_USERNAME / NEO4J_PASSWORD).
+
+services:
+  neo4j:
+    image: neo4j:5-community
+    container_name: enisa-neo4j
+    ports:
+      - "7474:7474"   # HTTP browser UI
+      - "7687:7687"   # Bolt protocol (used by the Python driver)
+    environment:
+      # NEO4J_AUTH format is user/password. Sourced from .env.
+      NEO4J_AUTH: "${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-enisa-graph-dev}"
+      # APOC is required by LlamaIndex's Neo4jPropertyGraphStore for schema
+      # introspection (apoc.meta.*) and bulk upserts.
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_apoc_export_file_enabled: "true"
+      NEO4J_apoc_import_file_enabled: "true"
+      # Modest heap/pagecache — fine for the sample corpus on a laptop.
+      NEO4J_server_memory_heap_max__size: "1G"
+      NEO4J_server_memory_pagecache_size: "512M"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      # Considered healthy once Bolt answers a trivial query.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  neo4j_data:
+  neo4j_logs:

@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets — never commit real credentials
+.env
+
+# Rebuildable vector index (run `python main.py --rebuild-index`).
+# The sample PDFs in enisa_docs/ ARE committed so the corpus ships with the repo;
+# the graph lives in Neo4j (a docker volume), also not in the repo.
+rag_store/
+
+# Unrelated sub-project sharing this folder (EU-compliance RAG) — not part of the
+# ENISA RAG agent. Remove this line if you want it tracked here.
+ai agent/
+
+# OS
+.DS_Store

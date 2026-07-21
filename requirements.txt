@@ -1,0 +1,25 @@
+# Scraper
+requests
+beautifulsoup4
+lxml
+playwright
+
+# RAG — LlamaIndex
+llama-index-core
+llama-index-embeddings-ollama
+llama-index-llms-ollama
+llama-index-retrievers-bm25
+
+# Graph store — Neo4j (GraphRAG layer)
+llama-index-graph-stores-neo4j
+neo4j
+
+# Config
+python-dotenv
+
+# Reranking
+sentence-transformers
+
+# API
+fastapi
+uvicorn[standard]
