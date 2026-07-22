@@ -50,6 +50,12 @@ logger = logging.getLogger(__name__)
 OLLAMA_EMBED_MODEL = "nomic-embed-text"
 OLLAMA_LLM_MODEL = "llama3.2"
 
+# Bound the generation context. Without this, llama-index defaults Ollama to the
+# model's full context (128K for llama3.2), which forces a ~17GB load that runs
+# on CPU and makes every answer take minutes. The RAG prompt only stuffs
+# RERANK_TOP_K chunks (~512 tokens each) + the question, so 8K is ample.
+OLLAMA_LLM_CONTEXT_WINDOW = 8192
+
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 64
 
@@ -76,6 +82,7 @@ def _configure_settings() -> None:
         model=OLLAMA_LLM_MODEL,
         base_url=OLLAMA_BASE_URL,
         request_timeout=OLLAMA_LLM_REQUEST_TIMEOUT,
+        context_window=OLLAMA_LLM_CONTEXT_WINDOW,
         temperature=0.0,
     )
 
@@ -272,6 +279,8 @@ def _build_hybrid_query_engine(index: VectorStoreIndex):
         retrievers=[vector_retriever, bm25_retriever],
         similarity_top_k=FUSION_TOP_K,
         num_queries=1,  # no query generation, just fuse
+        use_async=False,  # run retrievers synchronously — avoids nested-async
+        # crashes when engine.query() runs inside FastAPI's request threadpool
     )
 
     reranker = SentenceTransformerRerank(
