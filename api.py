@@ -56,9 +56,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="ENISA RAG Agent API",
+    title="Trinity API",
     version="0.2.0",
-    description="Query ENISA cybersecurity publications via hybrid RAG.",
+    description="Retrieval and NIS2 readiness analysis over EU cybersecurity regulation.",
     lifespan=lifespan,
     docs_url=None,   # replaced by the custom Scalar reference below
     redoc_url=None,
@@ -160,7 +160,7 @@ async def api_reference() -> HTMLResponse:
         <!doctype html>
         <html>
           <head>
-            <title>ENISA RAG Agent API — Reference</title>
+            <title>Trinity API Reference</title>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
             <style>body{margin:0;background:#0b0f19;}</style>
@@ -183,7 +183,7 @@ _LANDING_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ENISA RAG Agent</title>
+  <title>Trinity</title>
   <style>
     :root{
       --bg:#0a0e1a; --panel:rgba(20,26,40,.72); --panel-solid:#121826;
@@ -289,24 +289,24 @@ _LANDING_HTML = """<!doctype html>
 </head>
 <body>
   <nav><div class="wrap inner">
-    <div class="brand"><span class="logo"></span> ENISA RAG Agent</div>
+    <div class="brand"><span class="logo"></span> Trinity</div>
     <div class="navlinks">
-      <a href="/docs">API Reference</a>
-      <a href="/graph/stats">Graph</a>
-      <a href="https://github.com/GaganGanesh98" target="_blank" rel="noopener">GitHub</a>
+      <a href="/nis2">NIS2</a>
+      <a href="/docs">API</a>
+      <a href="/about">About</a>
     </div>
   </div></nav>
 
   <div class="wrap">
     <header>
       <span class="pill"><span class="dot" id="dot"></span><span id="statusText">connecting…</span><span style="color:var(--faint)">·</span><span id="uptime">v0.2.0</span></span>
-      <h1>Ask the ENISA<br>cybersecurity corpus</h1>
-      <p class="lead">Hybrid retrieval-augmented QA over ENISA publications — BM25 + vector fusion,
-        cross-encoder reranking, and a Neo4j knowledge-graph layer. Runs fully local via Ollama, no API keys.</p>
+      <h1>EU cybersecurity<br>regulation, answered</h1>
+      <p class="lead">Cited answers from ENISA publications, and NIS2 readiness analysis
+        for your own policies. Runs locally — documents are never stored.</p>
       <div class="cta">
-        <a class="btn primary" href="#console">Try it live ↓</a>
-        <a class="btn ghost" href="/docs">API Reference</a>
-        <a class="btn ghost" href="/openapi.json">OpenAPI</a>
+        <a class="btn primary" href="/nis2">Check NIS2 readiness</a>
+        <a class="btn ghost" href="#console">Ask a question</a>
+        <a class="btn ghost" href="/docs">API</a>
       </div>
 
       <div class="stats">
@@ -352,8 +352,9 @@ _LANDING_HTML = """<!doctype html>
     </section>
 
     <footer>
-      <span>Built by Gagan Ganesh · local-first energy &amp; security AI</span>
-      <span><a href="https://github.com/GaganGanesh98" target="_blank" rel="noopener">github.com/GaganGanesh98</a></span>
+      <span>Trinity</span>
+      <span><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+        · <a href="https://github.com/GaganGanesh98/Trinity" target="_blank" rel="noopener">GitHub</a></span>
     </footer>
   </div>
 
@@ -485,20 +486,9 @@ def handle_assess(
         "Omit to assess all thirteen.",
     ),
 ):
-    """Assess an uploaded document against the NIS2 Article 21 requirement domains.
-
-    Returns a per-domain report: status, severity, rationale, and a **verbatim**
-    quote from the uploaded document supporting each finding.
-
-    The upload is chunked and embedded in memory and discarded when the request
-    ends — it is never written to the vector store, and embeddings and generation
-    both run on the local Ollama server.
-
-    Not legal advice: this flags gaps for a human to review, it does not certify
-    compliance.
-    """
-    # Sync `def` for the same reason as /query — the assessment is a long
-    # blocking call that FastAPI will run in its threadpool.
+    """Assess an uploaded policy against the NIS2 Article 21 requirement domains."""
+    # Sync def as with /query: a long blocking call, run in FastAPI's threadpool.
+    # Uploads are held in memory only — see nis2/assessor.py.
     data = file.file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
@@ -535,16 +525,8 @@ class AssessUrlRequest(BaseModel):
 
 @app.post("/assess/url")
 def handle_assess_url(req: AssessUrlRequest):
-    """Assess a policy linked by URL instead of uploaded.
-
-    Covers a published policy page, a direct PDF link, and "anyone with the link"
-    shares from Google Drive/Docs, which are rewritten to their direct-download
-    form. HTML pages are reduced to text before assessment.
-
-    The fetch is restricted to public http(s) hosts: URLs resolving to loopback,
-    private or link-local addresses are refused, redirects are re-validated at
-    every hop, and the response is size-capped. As with upload, nothing is stored.
-    """
+    """Assess a policy from a URL. Accepts PDF, text, or an HTML page."""
+    # Fetch is SSRF-guarded — see nis2/fetch.py.
     try:
         data, filename = fetch_document(req.url)
     except FetchError as e:
@@ -565,7 +547,7 @@ def handle_assess_url(req: AssessUrlRequest):
 
 @app.get("/assess/checkpoints")
 def list_checkpoints():
-    """The NIS2 requirement domains an assessment covers, with expected evidence."""
+    """List the NIS2 requirement domains an assessment covers."""
     return [
         {
             "id": c.id,
@@ -607,15 +589,7 @@ class ScopeRequest(BaseModel):
 
 @app.post("/scope")
 def handle_scope(req: ScopeRequest):
-    """Determine whether an entity falls in NIS2 scope, and as what.
-
-    Rule-based end to end — no LLM is involved, so the answer is reproducible
-    and every step cites the article it follows from. Nothing is stored.
-
-    Indicative only, not legal advice: Member States may extend scope in national
-    transposition, and Art. 2(2)(d)–(g) contain judgement-based tests that are
-    returned as caveats rather than decided automatically.
-    """
+    """Determine whether an entity is in NIS2 scope, and its classification."""
     result = determine(
         ScopeInput(
             sector=req.sector,
@@ -640,24 +614,62 @@ def handle_scope(req: ScopeRequest):
 
 @app.get("/scope/sectors")
 def scope_sectors():
-    """Annex I/II sectors, subsectors, and the Art. 2(2) size-cap criteria."""
+    """List Annex I/II sectors and the Article 2(2) criteria."""
     return sectors()
+
+
+_STATIC = Path(__file__).parent / "static"
+
+
+def _serve(name: str) -> HTMLResponse:
+    page = _STATIC / name
+    if not page.exists():
+        raise HTTPException(status_code=404, detail=f"UI asset missing: static/{name}")
+    return HTMLResponse(page.read_text())
 
 
 @app.get("/nis2", response_class=HTMLResponse, include_in_schema=False)
 def nis2_ui() -> HTMLResponse:
-    """Browser UI for the scope check and the policy assessment."""
-    page = Path(__file__).parent / "static" / "nis2.html"
-    if not page.exists():
-        raise HTTPException(status_code=404, detail="UI asset missing: static/nis2.html")
-    return HTMLResponse(page.read_text())
+    return _serve("nis2.html")
+
+
+def _legal_page(active: str, title: str) -> HTMLResponse:
+    """Render one section of the shared About/Privacy/Terms page.
+
+    A single template holds all three so the shell, tab bar and styling stay in
+    one place; the requested section is revealed and the others hidden server-side
+    rather than by script, so each page is a real URL that renders without JS.
+    """
+    html = (_STATIC / "legal.html").read_text()
+    sections = ("ABOUT", "PRIVACY", "TERMS")
+    repl = {"{{TITLE}}": title}
+    for s in sections:
+        repl[f"{{{{HIDE_{s}}}}}"] = "" if s == active else "hidden"
+        repl[f"{{{{CUR_{s}}}}}"] = 'aria-current="page"' if s == active else ""
+    for k, v in repl.items():
+        html = html.replace(k, v)
+    return HTMLResponse(html)
+
+
+@app.get("/about", response_class=HTMLResponse, include_in_schema=False)
+def about_page() -> HTMLResponse:
+    return _legal_page("ABOUT", "About")
+
+
+@app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+def privacy_page() -> HTMLResponse:
+    return _legal_page("PRIVACY", "Privacy")
+
+
+@app.get("/terms", response_class=HTMLResponse, include_in_schema=False)
+def terms_page() -> HTMLResponse:
+    return _legal_page("TERMS", "Terms")
 
 
 @app.get("/graph/stats", response_model=GraphStatsResponse)
 def graph_stats():
-    """Node/edge counts by type for the Neo4j knowledge graph (GraphRAG layer).
-
-    Sync `def`: does blocking Neo4j I/O, so let FastAPI run it in the threadpool."""
+    """Node and edge counts by type for the knowledge graph."""
+    # Sync def: blocking Neo4j I/O, so FastAPI runs it in the threadpool.
     try:
         from rag.graph_indexer import get_graph_stats
 

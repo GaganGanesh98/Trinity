@@ -1,0 +1,201 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>{{TITLE}} — Trinity</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--bg:#fbfbfd;--panel:#fff;--ink:#16181d;--muted:#6a707c;--line:#e4e6eb;--accent:#2b5cff}
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0f1115;--panel:#171a20;--ink:#e9eaee;--muted:#959cab;--line:#282c34;--accent:#6c8cff}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+  a{color:var(--accent)}
+  header{border-bottom:1px solid var(--line);background:var(--panel)}
+  header .in{max-width:760px;margin:0 auto;padding:0 20px;height:56px;
+       display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:-.01em;
+       color:var(--ink);text-decoration:none}
+  .mark{width:20px;height:20px;border-radius:6px;
+       background:conic-gradient(from 210deg,var(--accent),#22d3ee,var(--accent))}
+  header nav a{margin-left:18px;font-size:13.5px;color:var(--muted);text-decoration:none}
+  header nav a:hover{color:var(--ink)}
+  .wrap{max-width:760px;margin:0 auto;padding:34px 20px 60px}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:26px}
+  .tabs a{padding:9px 15px;color:var(--muted);text-decoration:none;
+       border-bottom:2px solid transparent;margin-bottom:-1px;font-size:14px}
+  .tabs a[aria-current=page]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .updated{color:var(--muted);font-size:12.5px;margin:0 0 26px}
+  h2{font-size:16px;margin:28px 0 8px;letter-spacing:-.01em}
+  p,li{color:var(--ink)}
+  ul{padding-left:20px}li{margin:5px 0}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+  .callout{border:1px solid var(--line);border-left:3px solid var(--accent);
+       background:var(--panel);border-radius:0 8px 8px 0;padding:13px 16px;margin:16px 0}
+  .callout p{margin:0}
+  code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;
+       background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  footer{border-top:1px solid var(--line);margin-top:50px}
+  footer .in{max-width:760px;margin:0 auto;padding:18px 20px;display:flex;
+       justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  footer a{color:var(--muted);text-decoration:none;margin-left:16px}
+  footer a:hover{color:var(--ink)}
+</style>
+
+<header><div class="in">
+  <a class="brand" href="/"><span class="mark"></span>Trinity</a>
+  <nav><a href="/">Query</a><a href="/nis2">NIS2</a><a href="/docs">API</a></nav>
+</div></header>
+
+<div class="wrap">
+  <nav class="tabs">
+    <a href="/about"   {{CUR_ABOUT}}>About</a>
+    <a href="/privacy" {{CUR_PRIVACY}}>Privacy</a>
+    <a href="/terms"   {{CUR_TERMS}}>Terms</a>
+  </nav>
+
+  <!-- ══ ABOUT ══ -->
+  <section {{HIDE_ABOUT}}>
+    <h1>About Trinity</h1>
+    <p class="updated">Method and limitations</p>
+
+    <p>Trinity answers questions about EU cybersecurity regulation and assesses
+    security policies against NIS2 obligations. It runs on a corpus of ENISA
+    publications — threat landscapes, NIS2 guidance and AI-security frameworks.</p>
+
+    <h2>Retrieval</h2>
+    <p>Three retrieval architectures index the same corpus: hybrid BM25 + vector
+    with cross-encoder reranking, a Neo4j knowledge graph, and MongoDB Atlas
+    Vector Search. All three are scored by one evaluation harness.</p>
+
+    <h2>NIS2 assessment</h2>
+    <p>Assessments cover thirteen requirement domains, mirroring the structure
+    ENISA's <em>Technical Implementation Guidance</em> (June 2025) uses to
+    decompose the risk-management measures of Article 21(2). Findings cite a
+    published requirement rather than an internal checklist.</p>
+
+    <p>Each finding must quote your document verbatim. Quotes are verified as
+    real substrings of the source; anything the model paraphrases or invents is
+    discarded. A finding claiming coverage without a verifiable quote is reported
+    as not addressed and flagged for manual review.</p>
+
+    <h2>Measured performance</h2>
+    <p>Assessment quality is benchmarked against hand-labelled ground truth.
+    Current results on a single labelled policy:</p>
+    <table>
+      <tr><th>Metric</th><th>Result</th><th>Meaning</th></tr>
+      <tr><td>Gap recall</td><td>100%</td>
+          <td>Deficient requirements never reported as satisfied</td></tr>
+      <tr><td>Status accuracy</td><td>69%</td>
+          <td>Verdict matches the labelled expectation</td></tr>
+      <tr><td>Rationale recall</td><td>67%</td>
+          <td>Names the specific omission, not just the domain</td></tr>
+    </table>
+
+    <h2>Limitations</h2>
+    <ul>
+      <li>Status accuracy of 69% means roughly one finding in three needs
+          correction on review.</li>
+      <li>Ground truth currently covers one labelled document, so the figures
+          above are indicative rather than established.</li>
+      <li>Errors skew toward over-reporting gaps. A control that exists but is
+          worded obliquely may be reported as missing.</li>
+      <li>Scope determination is rule-based and does not decide the
+          judgement-based tests in Article 2(2)(d)–(g).</li>
+    </ul>
+
+    <div class="callout"><p><strong>Trinity does not certify compliance.</strong>
+    It surfaces likely gaps for a qualified person to review. See
+    <a href="/terms">Terms</a>.</p></div>
+  </section>
+
+  <!-- ══ PRIVACY ══ -->
+  <section {{HIDE_PRIVACY}}>
+    <h1>Privacy</h1>
+    <p class="updated">Last updated 16 August 2026</p>
+
+    <div class="callout"><p><strong>Documents you submit are not stored.</strong>
+    They are held in memory for the duration of the request and discarded when the
+    response is returned.</p></div>
+
+    <h2>What happens to a document</h2>
+    <ul>
+      <li>An uploaded file is written to a temporary directory only so the PDF
+          reader can open it, and that directory is removed before the request
+          completes.</li>
+      <li>The text is split and embedded into an in-memory index that exists for
+          one request. It is never written to a database or vector store.</li>
+      <li>Embeddings and analysis run on a local language model. Document content
+          is not transmitted to any third-party AI service.</li>
+    </ul>
+
+    <h2>Documents fetched by URL</h2>
+    <p>Submitting a URL causes a single server-side HTTP request to it. Only
+    public <code>http</code> and <code>https</code> addresses are retrieved;
+    requests resolving to private, loopback or link-local addresses are refused.
+    Fetched content is handled exactly as an upload — in memory, then discarded.</p>
+
+    <h2>Scope determination</h2>
+    <p>Scope answers are evaluated in the request and not retained. The
+    determination is rule-based; no data is sent to a language model.</p>
+
+    <h2>Operational data</h2>
+    <p>Server logs record request paths, timing and errors for reliability
+    purposes. They do not contain document contents or scope answers.</p>
+
+    <h2>Contact</h2>
+    <p>For questions about this policy, contact the operator of this deployment.</p>
+  </section>
+
+  <!-- ══ TERMS ══ -->
+  <section {{HIDE_TERMS}}>
+    <h1>Terms of Use</h1>
+    <p class="updated">Last updated 16 August 2026</p>
+
+    <div class="callout"><p><strong>Trinity is not legal advice and does not
+    certify compliance with NIS2 or any other regulation.</strong> Its output is
+    an indicative, automated analysis intended to support review by a qualified
+    person.</p></div>
+
+    <h2>Nature of the service</h2>
+    <p>Scope determination applies published criteria from Directive (EU)
+    2022/2555 to the answers you provide. It cannot decide the judgement-based
+    tests in Article 2(2)(d)–(g), and Member States may extend scope in national
+    transposition. Confirm your position with your national competent authority.</p>
+
+    <p>Policy assessment uses automated language analysis. It can misclassify a
+    requirement in either direction: reporting a gap that does not exist, or
+    failing to identify one that does. Findings must be verified against the
+    source document before being acted upon.</p>
+
+    <h2>No warranty</h2>
+    <p>The service is provided "as is", without warranty of any kind, express or
+    implied, including accuracy, completeness or fitness for a particular purpose.</p>
+
+    <h2>Limitation of liability</h2>
+    <p>To the extent permitted by law, the operator is not liable for any loss
+    arising from use of or reliance on the output, including regulatory penalties,
+    enforcement action or business loss.</p>
+
+    <h2>Your responsibilities</h2>
+    <ul>
+      <li>Submit only documents you are authorised to share.</li>
+      <li>Do not rely on the output as a substitute for professional advice.</li>
+      <li>Do not use the service to submit unlawful content or to attempt access
+          to systems you do not control.</li>
+    </ul>
+
+    <h2>Source material</h2>
+    <p>Regulatory references are to Directive (EU) 2022/2555 and to publications
+    of the European Union Agency for Cybersecurity (ENISA). Trinity is not
+    affiliated with, endorsed by, or connected to ENISA or any EU institution.</p>
+  </section>
+</div>
+
+<footer><div class="in">
+  <span>Trinity</span>
+  <span><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></span>
+</div></footer>
