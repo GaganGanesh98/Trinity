@@ -173,12 +173,50 @@ python eval.py --backend atlas
 python eval.py --backend all --out results.json   # both + markdown table
 ```
 
-`--backend all` prints a table ready to paste here:
+### Results
 
-| Backend | Source recall | Answer recall | Avg latency |
-| --- | --- | --- | --- |
-| local | _run it_ | | |
-| atlas | _run it_ | | |
+Both backends, `eval_questions.json` (5 questions, 7 expected answer strings):
+
+| Backend | Source recall | Answer recall |
+| --- | --- | --- |
+| local | 100% (5/5) | 100% (7/7) |
+| atlas | 100% (5/5) | 100% (7/7) |
+
+**This is a ceiling effect, not a tie on merit.** Every question names its target
+document almost verbatim ("...in the ENISA Threat Landscape 2024"), so any working
+retriever finds it. The current eval set has **no power to discriminate** between
+backends — a 100%/100% draw means the measurement failed, not that the backends
+are equivalent.
+
+Retrieval latency, measured **without** the LLM and interleaved between backends so
+machine-level drift hits both equally:
+
+| Backend | Warm retrieval |
+| --- | --- |
+| local | ~0.15s |
+| atlas | ~0.26s |
+
+Atlas costs ~0.11s more per query — about what a round trip to the Frankfurt
+cluster should cost. That is ~0.2% of end-to-end time, which local Ollama
+generation (50–90s per question) dominates entirely.
+
+Note that `eval.py`'s own `avg_latency_s` is **end-to-end** and should not be read
+as a backend comparison: it is mostly generation time, and because the backends run
+sequentially, whichever runs second absorbs more accumulated machine pressure. In
+the recorded run that inflated `atlas` to 137s against `local`'s 58s — an artifact
+of ordering, not a property of either store. Compare the retrieval-only numbers
+above instead.
+
+### Making the eval discriminate
+
+The next step is a harder question set, targeting the axes where the backends
+should actually diverge:
+
+- **Lexical-vs-semantic splits** — questions phrased in vocabulary absent from the
+  source text, where BM25 should fail and dense retrieval should win.
+- **Multi-hop questions** — "which sectors are targeted by actors using technique
+  X" — where the Neo4j graph should beat both vector backends.
+- **Unanswerable questions**, to measure false-positive retrieval.
 
 ### Retrieval modes & evaluation
 
