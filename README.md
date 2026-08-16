@@ -58,6 +58,36 @@ Configuration (corpus source, Ollama, Neo4j) lives in `config.py`; secrets in `.
 
 ---
 
+## Am I in scope? (`/scope`)
+
+Scope determination is **rule-based with no LLM in the path**. It follows a small
+number of published tests, so a deterministic implementation is reproducible,
+instant, auditable, and cannot hallucinate. Every answer cites the article it
+came from.
+
+```bash
+curl -X POST http://127.0.0.1:8000/scope -H 'Content-Type: application/json' \
+  -d '{"sector":"health","employees":800,"annual_turnover_eur":90000000}'
+```
+
+The tests, in order: **sector** (Annex I or II, Art. 2(1)) → **size-cap
+exemptions** (Art. 2(2) puts DNS/TLD, trust services, public e-comms, sole
+national providers and central government in scope *regardless of size*) →
+**size** (at least medium under Recommendation 2003/361/EC) → **classification**
+(large + Annex I ⇒ essential, otherwise important).
+
+That second test matters more than it sounds. A six-person DNS provider is an
+**essential entity** despite being micro-sized — a size-only checker gets that
+exactly backwards.
+
+Out-of-scope answers still return caveats, because "no" is rarely the end of it:
+Art. 2(2)(d)–(g) contain judgement-based tests no tool can decide for you,
+Member States may extend scope in transposition, and entities in scope must
+impose security requirements on their suppliers (Art. 21(2)(d)) — so the
+obligations often arrive contractually anyway.
+
+---
+
 ## NIS2 readiness assessment
 
 Searching public regulation is not a product — a search engine already does it.
@@ -96,6 +126,52 @@ curl -F "file=@data/samples/sample_security_policy.txt" \
 
 Assess a single domain with `-F "checkpoints=NIS2-03"`. `GET /assess/checkpoints`
 lists all thirteen with the evidence each expects.
+
+### Linking a document instead of uploading
+
+`POST /assess/url` takes a link. One HTTP fetch covers more sharing methods than
+it first appears — a published policy page, a direct PDF, a Google Drive/Docs
+"anyone with the link" share, a public Notion or Confluence page — all of which
+are just URLs. Drive and Docs links are rewritten to their direct-download form,
+and HTML is reduced to text before assessment.
+
+```bash
+curl -X POST http://127.0.0.1:8000/assess/url -H 'Content-Type: application/json' \
+  -d '{"url":"https://example.com/security-policy.pdf"}'
+```
+
+Provider OAuth (private Drive/SharePoint files) would extend this to documents
+that are not shareable by link, but that is a much larger build and unnecessary
+for the common case.
+
+**This endpoint is an SSRF surface** and is guarded accordingly: only `http(s)`,
+every hostname resolved and rejected if it maps to loopback, private, link-local
+or reserved space, cloud metadata endpoints refused by name, redirects followed
+manually so each hop is re-validated, and the body size-capped while streaming.
+Without those controls, a caller could use the server to reach internal hosts
+they cannot see themselves.
+
+### Browser UI
+
+`GET /nis2` serves a single self-contained page with both tools — the scope
+questionnaire and the policy assessment (upload or link). The sector list and
+the Art. 2(2) criteria are fetched from `/scope/sectors` at load, so the form
+cannot drift out of sync with the rules the backend actually applies.
+
+### Benchmarking the assessment model
+
+Finding quality is model-dependent, so it is measured the same way retrieval is,
+against hand-labelled ground truth in `nis2/ground_truth.json`:
+
+```bash
+python -m nis2.benchmark --models llama3.2 qwen2.5:7b
+```
+
+Three things are scored separately, since a model can be right for the wrong
+reason: **status accuracy**, **gap recall** (of genuinely deficient checkpoints,
+how many escaped being marked ADDRESSED — a false clean bill of health is the
+costly error), and **rationale recall** (did it name the specific omission, such
+as the missing Art. 23 deadlines).
 
 ### Where the checkpoints come from
 

@@ -81,6 +81,10 @@ class Report(BaseModel):
     document_name: str
     findings: list[Finding]
 
+    # Which model produced the judgements. Recorded because finding quality is
+    # model-dependent, so a report is only interpretable alongside it.
+    model: str = ""
+
     # Headline counts, so a caller does not have to recompute them.
     total: int = 0
     addressed: int = 0

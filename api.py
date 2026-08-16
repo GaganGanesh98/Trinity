@@ -17,14 +17,19 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+import requests
+
 from nis2.assessor import assess
 from nis2.checkpoints import CHECKPOINTS
+from nis2.fetch import FetchError, fetch_document
+from nis2.scope import ScopeInput, determine, sectors
 from rag.indexer import load_index, query, query_with_sources
 
 logger = logging.getLogger(__name__)
@@ -517,6 +522,47 @@ def handle_assess(
     return report.model_dump()
 
 
+class AssessUrlRequest(BaseModel):
+    url: str = Field(description="Public link to a policy: PDF, text file, or HTML page.")
+    checkpoints: list[str] | None = Field(
+        None, description="Optional subset of checkpoint ids, e.g. ['NIS2-03']."
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"url": "https://example.com/security-policy.pdf"}}
+    )
+
+
+@app.post("/assess/url")
+def handle_assess_url(req: AssessUrlRequest):
+    """Assess a policy linked by URL instead of uploaded.
+
+    Covers a published policy page, a direct PDF link, and "anyone with the link"
+    shares from Google Drive/Docs, which are rewritten to their direct-download
+    form. HTML pages are reduced to text before assessment.
+
+    The fetch is restricted to public http(s) hosts: URLs resolving to loopback,
+    private or link-local addresses are refused, redirects are re-validated at
+    every hop, and the response is size-capped. As with upload, nothing is stored.
+    """
+    try:
+        data, filename = fetch_document(req.url)
+    except FetchError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch the URL: {e}")
+
+    try:
+        report = assess(data, filename, checkpoint_ids=req.checkpoints)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Assessment failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {**report.model_dump(), "source_url": req.url}
+
+
 @app.get("/assess/checkpoints")
 def list_checkpoints():
     """The NIS2 requirement domains an assessment covers, with expected evidence."""
@@ -530,6 +576,81 @@ def list_checkpoints():
         }
         for c in CHECKPOINTS
     ]
+
+
+class ScopeRequest(BaseModel):
+    """Answers to the scope questionnaire. Everything except sector is optional."""
+
+    sector: str = Field(description="Annex I/II sector, e.g. 'health'. See GET /scope/sectors.")
+    subsector: str | None = None
+    employees: int | None = Field(None, ge=0)
+    annual_turnover_eur: float | None = Field(None, ge=0)
+    balance_sheet_eur: float | None = Field(None, ge=0)
+    flags: dict[str, bool] = Field(
+        default_factory=dict,
+        description="Art. 2(2) size-cap criteria, e.g. {'is_dns_or_tld_provider': true}.",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "sector": "health",
+                "subsector": "healthcare providers",
+                "employees": 800,
+                "annual_turnover_eur": 90000000,
+                "balance_sheet_eur": 70000000,
+                "flags": {},
+            }
+        }
+    )
+
+
+@app.post("/scope")
+def handle_scope(req: ScopeRequest):
+    """Determine whether an entity falls in NIS2 scope, and as what.
+
+    Rule-based end to end — no LLM is involved, so the answer is reproducible
+    and every step cites the article it follows from. Nothing is stored.
+
+    Indicative only, not legal advice: Member States may extend scope in national
+    transposition, and Art. 2(2)(d)–(g) contain judgement-based tests that are
+    returned as caveats rather than decided automatically.
+    """
+    result = determine(
+        ScopeInput(
+            sector=req.sector,
+            subsector=req.subsector,
+            employees=req.employees,
+            annual_turnover_eur=req.annual_turnover_eur,
+            balance_sheet_eur=req.balance_sheet_eur,
+            flags=req.flags,
+        )
+    )
+    return {
+        "classification": result.classification.value,
+        "in_scope": result.in_scope,
+        "size": result.size.value if result.size else None,
+        "annex": result.annex,
+        "reasoning": result.reasoning,
+        "caveats": result.caveats,
+        "obligations": result.obligations,
+        "disclaimer": result.disclaimer,
+    }
+
+
+@app.get("/scope/sectors")
+def scope_sectors():
+    """Annex I/II sectors, subsectors, and the Art. 2(2) size-cap criteria."""
+    return sectors()
+
+
+@app.get("/nis2", response_class=HTMLResponse, include_in_schema=False)
+def nis2_ui() -> HTMLResponse:
+    """Browser UI for the scope check and the policy assessment."""
+    page = Path(__file__).parent / "static" / "nis2.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="UI asset missing: static/nis2.html")
+    return HTMLResponse(page.read_text())
 
 
 @app.get("/graph/stats", response_model=GraphStatsResponse)

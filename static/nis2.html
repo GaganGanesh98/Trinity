@@ -1,0 +1,219 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>NIS2 Readiness — Trinity</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#fbfbfd; --panel:#fff; --ink:#16181d; --muted:#666b76; --line:#e3e5ea;
+    --accent:#2b5cff; --ok:#1a7f4b; --warn:#b06a00; --bad:#c02626; --unclear:#5a5f6a;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#111318;--panel:#181b21;--ink:#e9eaee;--muted:#9aa0ad;--line:#2a2e37;
+          --accent:#6c8cff;--ok:#4ec27f;--warn:#e0a33c;--bad:#ff6b6b;--unclear:#98a0ad;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 26px}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:22px}
+  .tab{padding:9px 15px;border:0;background:none;color:var(--muted);cursor:pointer;
+       font:inherit;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  label{display:block;font-size:13px;font-weight:600;margin:14px 0 5px}
+  input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line);
+       border-radius:7px;background:var(--bg);color:var(--ink);font:inherit}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:620px){.row{grid-template-columns:1fr}}
+  button.go{margin-top:18px;padding:10px 18px;border:0;border-radius:7px;
+       background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+  button.go:disabled{opacity:.55;cursor:progress}
+  .checks{margin-top:10px;display:grid;gap:7px}
+  .checks label{display:flex;gap:8px;align-items:flex-start;font-weight:400;font-size:13px;margin:0}
+  .checks input{width:auto;margin-top:3px}
+  .out{margin-top:22px}
+  .verdict{padding:14px 16px;border-radius:var(--radius);border:1px solid var(--line);margin-bottom:16px}
+  .verdict h2{margin:0 0 4px;font-size:19px}
+  .ESSENTIAL{border-left:4px solid var(--bad)}
+  .IMPORTANT{border-left:4px solid var(--warn)}
+  .LIKELY_OUT_OF_SCOPE,.OUT_OF_SCOPE{border-left:4px solid var(--ok)}
+  ul{margin:8px 0;padding-left:20px}li{margin:4px 0}
+  .finding{border:1px solid var(--line);border-radius:var(--radius);padding:13px 15px;margin-bottom:10px}
+  .fhead{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+  .fdom{font-weight:600}
+  .art{color:var(--muted);font-size:12px}
+  .pill{font-size:11px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:20px;border:1px solid}
+  .p-ADDRESSED{color:var(--ok);border-color:var(--ok)}
+  .p-PARTIAL{color:var(--warn);border-color:var(--warn)}
+  .p-NOT_ADDRESSED{color:var(--bad);border-color:var(--bad)}
+  .p-UNCLEAR{color:var(--unclear);border-color:var(--unclear)}
+  .rat{margin:8px 0 0;font-size:14px}
+  blockquote{margin:9px 0 0;padding:8px 12px;border-left:3px solid var(--line);
+       background:var(--bg);border-radius:0 6px 6px 0;font-size:13px;color:var(--muted)}
+  .stats{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:var(--muted)}
+  .stats b{color:var(--ink);font-size:17px;display:block}
+  .note{font-size:12px;color:var(--muted);margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+  .err{color:var(--bad);margin-top:14px}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);
+       border-top-color:var(--accent);border-radius:50%;animation:s .7s linear infinite;margin-right:7px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .hint{font-size:12px;color:var(--muted);margin-top:5px}
+</style>
+
+<div class="wrap">
+  <h1>NIS2 Readiness</h1>
+  <p class="sub">Check whether NIS2 applies to you, then find the gaps in your security policy.</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true"  data-p="scope">Am I in scope?</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="assess">Assess a policy</button>
+  </div>
+
+  <!-- ── scope ─────────────────────────────────────────────────────────── -->
+  <section class="panel" id="p-scope">
+    <label for="sector">Sector</label>
+    <select id="sector"><option value="">Loading…</option></select>
+    <div class="hint">Listed in Annex I or II of the directive. If nothing matches, you are likely out of scope.</div>
+
+    <div class="row">
+      <div><label for="emp">Employees</label><input id="emp" type="number" min="0" placeholder="e.g. 120"></div>
+      <div><label for="turn">Annual turnover (€)</label><input id="turn" type="number" min="0" placeholder="e.g. 30000000"></div>
+    </div>
+    <label for="bal">Balance sheet total (€)</label>
+    <input id="bal" type="number" min="0" placeholder="e.g. 20000000">
+
+    <label style="margin-top:18px">Any of these apply?</label>
+    <div class="checks" id="flags"></div>
+
+    <button class="go" id="goScope">Check scope</button>
+    <div class="out" id="scopeOut"></div>
+  </section>
+
+  <!-- ── assess ────────────────────────────────────────────────────────── -->
+  <section class="panel" id="p-assess" hidden>
+    <label for="file">Upload a policy (PDF, TXT or MD)</label>
+    <input id="file" type="file" accept=".pdf,.txt,.md">
+
+    <label for="url" style="margin-top:18px">…or link one</label>
+    <input id="url" type="url" placeholder="https://example.com/security-policy.pdf">
+    <div class="hint">Public links only. Google Drive/Docs “anyone with the link” shares work.</div>
+
+    <button class="go" id="goAssess">Assess</button>
+    <div class="hint" style="margin-top:8px">Roughly 13 s per requirement domain — a full run takes a few minutes.</div>
+    <div class="out" id="assessOut"></div>
+  </section>
+
+  <p class="note">
+    Indicative only and not legal advice. Uploaded and linked documents are analysed
+    in memory and never stored; the models run locally.
+  </p>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+  $('#p-scope').hidden  = t.dataset.p !== 'scope';
+  $('#p-assess').hidden = t.dataset.p !== 'assess';
+});
+
+// Populate sectors and the Art. 2(2) criteria from the API, so the form can
+// never drift out of sync with the rules the backend actually applies.
+fetch('/scope/sectors').then(r => r.json()).then(d => {
+  const sel = $('#sector');
+  sel.innerHTML = '<option value="">Select…</option>';
+  for (const [annex, key] of [['annex_I', 'Annex I — high criticality'],
+                              ['annex_II', 'Annex II — other critical']]) {
+    const g = document.createElement('optgroup'); g.label = key;
+    for (const name of Object.keys(d[annex].sectors)) {
+      const o = document.createElement('option'); o.value = name;
+      o.textContent = name.replace(/\b\w/g, c => c.toUpperCase());
+      g.appendChild(o);
+    }
+    sel.appendChild(g);
+  }
+  const og = document.createElement('optgroup'); og.label = 'Other';
+  const oo = document.createElement('option'); oo.value = 'other';
+  oo.textContent = 'None of these'; og.appendChild(oo); sel.appendChild(og);
+
+  $('#flags').innerHTML = Object.entries(d.size_exempt_criteria).map(([k, v]) =>
+    `<label><input type="checkbox" data-flag="${esc(k)}"><span>${esc(v)}</span></label>`).join('');
+});
+
+$('#goScope').onclick = async () => {
+  const btn = $('#goScope'), out = $('#scopeOut');
+  const sector = $('#sector').value;
+  if (!sector) { out.innerHTML = '<p class="err">Choose a sector first.</p>'; return; }
+  const flags = {};
+  document.querySelectorAll('#flags input').forEach(c => { if (c.checked) flags[c.dataset.flag] = true; });
+  const num = id => $(id).value === '' ? null : Number($(id).value);
+
+  btn.disabled = true; out.innerHTML = '<p><span class="spin"></span>Checking…</p>';
+  try {
+    const r = await fetch('/scope', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sector, employees: num('#emp'),
+        annual_turnover_eur: num('#turn'), balance_sheet_eur: num('#bal'), flags})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Request failed');
+    const label = {ESSENTIAL: 'Essential entity', IMPORTANT: 'Important entity',
+                   LIKELY_OUT_OF_SCOPE: 'Likely out of scope', OUT_OF_SCOPE: 'Out of scope'}[d.classification];
+    out.innerHTML = `
+      <div class="verdict ${esc(d.classification)}">
+        <h2>${esc(label)}</h2>
+        <div class="art">${d.in_scope ? 'NIS2 applies to you.' : 'NIS2 does not appear to apply on these answers.'}</div>
+      </div>
+      <b>How this was determined</b><ul>${d.reasoning.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      ${d.obligations.length ? `<b>What you must do</b><ul>${d.obligations.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${d.caveats.length ? `<b>Caveats</b><ul>${d.caveats.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <p class="note">${esc(d.disclaimer)}</p>`;
+  } catch (e) {
+    out.innerHTML = `<p class="err">${esc(e.message)}</p>`;
+  } finally { btn.disabled = false; }
+};
+
+$('#goAssess').onclick = async () => {
+  const btn = $('#goAssess'), out = $('#assessOut');
+  const f = $('#file').files[0], url = $('#url').value.trim();
+  if (!f && !url) { out.innerHTML = '<p class="err">Upload a file or paste a link.</p>'; return; }
+
+  btn.disabled = true;
+  out.innerHTML = '<p><span class="spin"></span>Assessing all thirteen domains — this takes a few minutes.</p>';
+  try {
+    const r = f
+      ? await fetch('/assess', {method: 'POST', body: (() => { const b = new FormData(); b.append('file', f); return b; })()})
+      : await fetch('/assess/url', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({url})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Request failed');
+    out.innerHTML = `
+      <div class="stats">
+        <div><b>${d.coverage_pct}%</b>coverage</div>
+        <div><b>${d.addressed}</b>addressed</div>
+        <div><b>${d.partial}</b>partial</div>
+        <div><b>${d.not_addressed}</b>not addressed</div>
+        <div><b>${d.high_severity_gaps}</b>high-severity gaps</div>
+      </div>
+      ${d.findings.map(x => `
+        <div class="finding">
+          <div class="fhead">
+            <div><span class="fdom">${esc(x.domain)}</span> <span class="art">${esc(x.article)}</span></div>
+            <span class="pill p-${esc(x.status)}">${esc(x.status.replace('_', ' '))}</span>
+          </div>
+          <p class="rat">${esc(x.rationale)}</p>
+          ${x.excerpt ? `<blockquote>“${esc(x.excerpt)}”</blockquote>` : ''}
+        </div>`).join('')}
+      <p class="note">Assessed with ${esc(d.model || 'local model')}. Quoted text is verified
+      verbatim against your document; findings claiming coverage without a quote are marked
+      unclear for manual review.</p>`;
+  } catch (e) {
+    out.innerHTML = `<p class="err">${esc(e.message)}</p>`;
+  } finally { btn.disabled = false; }
+};
+</script>

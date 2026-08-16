@@ -1,0 +1,61 @@
+{
+  "_comment": "Hand-labelled expected assessment of data/samples/sample_security_policy.txt. Labels reflect what the document actually says, judged against the checkpoint obligations in nis2/checkpoints.py. 'must_mention' lists substrings a correct rationale should raise; they are scored separately from status so a model can be right for the wrong reason and still be caught.",
+  "document": "data/samples/sample_security_policy.txt",
+  "labels": {
+    "NIS2-01": {
+      "status": "ADDRESSED",
+      "note": "Versioned policy, approved by the Managing Director, reviewed annually."
+    },
+    "NIS2-02": {
+      "status": "ADDRESSED",
+      "note": "Risk register, annual review, scoring scale, treatment sign-off."
+    },
+    "NIS2-03": {
+      "status": "PARTIAL",
+      "must_mention": ["report", "authority"],
+      "note": "Internal handling and classification exist, but nothing on notifying the CSIRT/authority or the Art. 23 24h/72h deadlines. This is the most consequential gap in the document."
+    },
+    "NIS2-04": {
+      "status": "PARTIAL",
+      "must_mention": ["test"],
+      "note": "Nightly backups with retention, but no RTO/RPO, no restoration testing, and backups kept in the same building."
+    },
+    "NIS2-05": {
+      "status": "NOT_ADDRESSED",
+      "note": "'IT services may be procured from approved vendors' imposes no security requirement and describes no supplier risk assessment."
+    },
+    "NIS2-06": {
+      "status": "NOT_ADDRESSED",
+      "note": "Nothing on secure development, change management, patching or vulnerability disclosure."
+    },
+    "NIS2-07": {
+      "status": "NOT_ADDRESSED",
+      "note": "No audit, control testing, metrics or corrective-action process."
+    },
+    "NIS2-08": {
+      "status": "PARTIAL",
+      "note": "Onboarding briefing only: no recurring training, no completion tracking, no management-body training."
+    },
+    "NIS2-09": {
+      "status": "NOT_ADDRESSED",
+      "note": "The document contains no cryptography or encryption section whatsoever."
+    },
+    "NIS2-10": {
+      "status": "NOT_ADDRESSED",
+      "note": "No screening, employment terms, disciplinary process or leaver access revocation."
+    },
+    "NIS2-11": {
+      "status": "PARTIAL",
+      "must_mention": ["multi-factor", "mfa"],
+      "note": "Individual accounts and restricted admin rights, but no MFA and no periodic access review."
+    },
+    "NIS2-12": {
+      "status": "NOT_ADDRESSED",
+      "note": "No asset inventory, ownership or classification scheme."
+    },
+    "NIS2-13": {
+      "status": "PARTIAL",
+      "note": "Office locking and keyed server room, but no visitor management and nothing environmental (power, cooling, fire)."
+    }
+  }
+}

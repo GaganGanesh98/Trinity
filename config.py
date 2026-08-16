@@ -125,3 +125,10 @@ MONGODB_VECTOR_INDEX = os.getenv("MONGODB_VECTOR_INDEX", "vector_index")
 # dimension at creation time and rejects mismatched vectors, so changing the
 # embedding model means dropping and recreating the index.
 EMBED_DIMENSIONS = 768
+
+
+# ── NIS2 assessment (nis2/) ─────────────────────────────────────────────────
+# The assessor's judgement quality is the binding constraint on whether the
+# report is usable, so the model is separable from the chat model used by
+# /query. Overridable to benchmark candidates against nis2/ground_truth.json.
+NIS2_LLM_MODEL = os.getenv("NIS2_LLM_MODEL", "llama3.2")

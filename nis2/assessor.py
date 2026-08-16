@@ -29,9 +29,14 @@ from llama_index.core import Document, Settings, SimpleDirectoryReader, VectorSt
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.retrievers import VectorIndexRetriever
 
+from config import (
+    NIS2_LLM_MODEL,
+    OLLAMA_BASE_URL,
+    OLLAMA_LLM_REQUEST_TIMEOUT,
+)
 from nis2.checkpoints import Checkpoint, get_checkpoints
 from nis2.schema import Assessment, Finding, Report, Severity, Status, verify_excerpt
-from rag.indexer import _configure_settings
+from rag.indexer import OLLAMA_LLM_CONTEXT_WINDOW, _configure_settings
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +77,25 @@ ADDRESSED.
 word-for-word. Do not reword it. If nothing relevant is present, return an empty \
 string.
 """
+
+
+def _assessment_llm(model: str | None = None):
+    """
+    LLM used for assessment, kept separate from Settings.llm.
+
+    /query and the assessor have different needs: chat answers favour speed,
+    while a finding someone acts on favours judgement. Keeping them separable
+    lets the assessor run a larger model without slowing the chat path.
+    """
+    from llama_index.llms.ollama import Ollama
+
+    return Ollama(
+        model=model or NIS2_LLM_MODEL,
+        base_url=OLLAMA_BASE_URL,
+        request_timeout=OLLAMA_LLM_REQUEST_TIMEOUT,
+        context_window=OLLAMA_LLM_CONTEXT_WINDOW,
+        temperature=0.0,
+    )
 
 
 def load_document(path: Path) -> tuple[list[Document], str]:
@@ -128,6 +152,7 @@ def _assess_one(
     doc_retriever: VectorIndexRetriever,
     guidance_retriever: VectorIndexRetriever | None,
     document_text: str,
+    llm,
 ) -> Finding:
     passages = [n.get_content().strip() for n in doc_retriever.retrieve(cp.document_query)]
     guidance = ""
@@ -166,7 +191,7 @@ def _assess_one(
     )
 
     try:
-        result: Assessment = Settings.llm.structured_predict(Assessment, prompt=_as_template(prompt))
+        result: Assessment = llm.structured_predict(Assessment, prompt=_as_template(prompt))
     except Exception as e:
         # One malformed structured response must not lose the other twelve
         # findings, so degrade this checkpoint rather than failing the report.
@@ -224,6 +249,7 @@ def assess(
     filename: str,
     *,
     checkpoint_ids: list[str] | None = None,
+    model: str | None = None,
 ) -> Report:
     """
     Assess an uploaded document against the NIS2 checkpoints.
@@ -232,6 +258,7 @@ def assess(
         data: raw file bytes (PDF, TXT or MD).
         filename: original name, used for the suffix and in the report.
         checkpoint_ids: optional subset, e.g. ["NIS2-03"] to assess one domain.
+        model: override the Ollama model (defaults to config.NIS2_LLM_MODEL).
     """
     _configure_settings()
 
@@ -242,8 +269,9 @@ def assess(
     doc_retriever = VectorIndexRetriever(index=index, similarity_top_k=DOC_TOP_K)
     guidance = _guidance_retriever()
 
+    llm = _assessment_llm(model)
     findings = [
-        _assess_one(cp, doc_retriever, guidance, document_text)
+        _assess_one(cp, doc_retriever, guidance, document_text, llm)
         for cp in get_checkpoints(checkpoint_ids)
     ]
-    return Report(document_name=filename, findings=findings).finalise()
+    return Report(document_name=filename, findings=findings, model=llm.model).finalise()
