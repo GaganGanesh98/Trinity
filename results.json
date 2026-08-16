@@ -1,0 +1,78 @@
+[
+  {
+    "backend": "local",
+    "source_recall": 1.0,
+    "answer_recall": 1.0,
+    "avg_latency_s": 57.9,
+    "details": [
+      {
+        "question": "What are the main cybersecurity challenges for artificial intelligence systems according to ENISA?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 46.3
+      },
+      {
+        "question": "What does the ENISA Multilayer Framework recommend for good cybersecurity practices in AI?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 41.28
+      },
+      {
+        "question": "What are the top cyber threats identified in the ENISA Threat Landscape 2024?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 45.6
+      },
+      {
+        "question": "What does NIS2 require for technical implementation of cybersecurity measures?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 65.35
+      },
+      {
+        "question": "What cybersecurity threats affect the financial sector according to ENISA?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 90.98
+      }
+    ]
+  },
+  {
+    "backend": "atlas",
+    "source_recall": 1.0,
+    "answer_recall": 1.0,
+    "avg_latency_s": 137.21,
+    "details": [
+      {
+        "question": "What are the main cybersecurity challenges for artificial intelligence systems according to ENISA?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 48.87
+      },
+      {
+        "question": "What does the ENISA Multilayer Framework recommend for good cybersecurity practices in AI?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 54.65
+      },
+      {
+        "question": "What are the top cyber threats identified in the ENISA Threat Landscape 2024?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 94.02
+      },
+      {
+        "question": "What does NIS2 require for technical implementation of cybersecurity measures?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 214.26
+      },
+      {
+        "question": "What cybersecurity threats affect the financial sector according to ENISA?",
+        "source_precision": 1.0,
+        "answer_precision": 1.0,
+        "latency_s": 274.24
+      }
+    ]
+  }
+]
