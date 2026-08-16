@@ -55,10 +55,41 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# Tag order here is the order sections appear in the reference, so it reads as a
+# path through the product rather than as an alphabetical dump.
+TAGS = [
+    {
+        "name": "NIS2",
+        "description": (
+            "Determine whether NIS2 applies to an entity, and assess a security "
+            "policy against the Article 21 requirement domains. Start with "
+            "**Check scope**; it needs no document and returns instantly."
+        ),
+    },
+    {
+        "name": "Query",
+        "description": (
+            "Ask a question about EU cybersecurity regulation. Answers are grounded "
+            "in ENISA publications and returned with the sources used."
+        ),
+    },
+    {
+        "name": "Knowledge graph",
+        "description": "Entity and relationship counts from the graph retrieval layer.",
+    },
+    {"name": "System", "description": "Service status."},
+]
+
 app = FastAPI(
     title="Trinity API",
     version="0.2.0",
-    description="Retrieval and NIS2 readiness analysis over EU cybersecurity regulation.",
+    description=(
+        "Retrieval and NIS2 readiness analysis over EU cybersecurity regulation.\n\n"
+        "All endpoints are unauthenticated and run locally. Submitted documents are "
+        "held in memory for the request and never stored — see "
+        "[Privacy](/privacy) and [Terms](/terms)."
+    ),
+    openapi_tags=TAGS,
     lifespan=lifespan,
     docs_url=None,   # replaced by the custom Scalar reference below
     redoc_url=None,
@@ -453,7 +484,7 @@ async def landing() -> HTMLResponse:
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
-@app.post("/query", response_model=QueryResponse)
+@app.post("/query", response_model=QueryResponse, tags=["Query"], summary="Ask a question")
 def handle_query(req: QueryRequest):
     # Sync `def` on purpose: query_with_sources() is blocking and the hybrid
     # QueryFusionRetriever runs nested async internally. FastAPI runs sync path
@@ -482,7 +513,7 @@ def handle_query(req: QueryRequest):
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB — policy documents are small
 
 
-@app.post("/assess")
+@app.post("/assess", tags=["NIS2"], summary="Assess an uploaded policy")
 def handle_assess(
     file: UploadFile = File(..., description="Security policy to assess (PDF, TXT or MD)"),
     checkpoints: str | None = Form(
@@ -528,7 +559,7 @@ class AssessUrlRequest(BaseModel):
     )
 
 
-@app.post("/assess/url")
+@app.post("/assess/url", tags=["NIS2"], summary="Assess a policy from a URL")
 def handle_assess_url(req: AssessUrlRequest):
     """Assess a policy from a URL. Accepts PDF, text, or an HTML page."""
     # Fetch is SSRF-guarded — see nis2/fetch.py.
@@ -550,7 +581,7 @@ def handle_assess_url(req: AssessUrlRequest):
     return {**report.model_dump(), "source_url": req.url}
 
 
-@app.get("/assess/checkpoints")
+@app.get("/assess/checkpoints", tags=["NIS2"], summary="List requirement domains")
 def list_checkpoints():
     """List the NIS2 requirement domains an assessment covers."""
     return [
@@ -592,7 +623,7 @@ class ScopeRequest(BaseModel):
     )
 
 
-@app.post("/scope")
+@app.post("/scope", tags=["NIS2"], summary="Check scope")
 def handle_scope(req: ScopeRequest):
     """Determine whether an entity is in NIS2 scope, and its classification."""
     result = determine(
@@ -617,7 +648,7 @@ def handle_scope(req: ScopeRequest):
     }
 
 
-@app.get("/scope/sectors")
+@app.get("/scope/sectors", tags=["NIS2"], summary="List sectors and criteria")
 def scope_sectors():
     """List Annex I/II sectors and the Article 2(2) criteria."""
     return sectors()
@@ -671,7 +702,8 @@ def terms_page() -> HTMLResponse:
     return _legal_page("TERMS", "Terms")
 
 
-@app.get("/graph/stats", response_model=GraphStatsResponse)
+@app.get("/graph/stats", response_model=GraphStatsResponse, tags=["Knowledge graph"],
+          summary="Graph statistics")
 def graph_stats():
     """Node and edge counts by type for the knowledge graph."""
     # Sync def: blocking Neo4j I/O, so FastAPI runs it in the threadpool.
@@ -691,7 +723,7 @@ def graph_stats():
         )
 
 
-@app.get("/health")
+@app.get("/health", tags=["System"], summary="Health check")
 async def health():
     return {
         "status": "ok",
