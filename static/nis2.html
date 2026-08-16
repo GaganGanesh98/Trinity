@@ -18,11 +18,19 @@
   header{border-bottom:1px solid var(--line);background:var(--panel)}
   header .in{max-width:880px;margin:0 auto;padding:0 20px;height:56px;
        display:flex;align-items:center;justify-content:space-between}
-  .brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:-.01em}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:-.01em;
+       color:var(--ink);text-decoration:none}
   .mark{width:20px;height:20px;border-radius:6px;
        background:conic-gradient(from 210deg,var(--accent),#22d3ee,var(--accent))}
+  header nav{display:flex;align-items:center}
   header nav a{margin-left:18px;font-size:13.5px;color:var(--muted);text-decoration:none}
   header nav a:hover{color:var(--ink)}
+  .home{margin-left:16px;padding-left:16px;border-left:1px solid var(--line);
+       display:flex;align-items:center}
+  .home a{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+       margin:0;border-radius:8px;transition:background .15s}
+  .home a:hover{background:var(--bg)}
+  .home .mark{width:22px;height:22px;box-shadow:0 0 0 1px var(--line)}
   .wrap{max-width:880px;margin:0 auto;padding:30px 20px 60px}
   h1{font-size:23px;margin:0 0 20px;letter-spacing:-.02em}
   .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px}
@@ -86,8 +94,11 @@
 </style>
 
 <header><div class="in">
-  <div class="brand"><span class="mark"></span>Trinity</div>
-  <nav><a href="/">Query</a><a href="/nis2">NIS2</a><a href="/docs">API</a></nav>
+  <a class="brand" href="/"><span class="mark"></span>Trinity</a>
+  <nav>
+    <a href="/">Query</a><a href="/nis2">NIS2</a><a href="/docs">API</a>
+    <span class="home"><a href="/" title="Home" aria-label="Home"><span class="mark"></span></a></span>
+  </nav>
 </div></header>
 
 <div class="wrap">

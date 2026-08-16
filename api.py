@@ -219,6 +219,10 @@ _LANDING_HTML = """<!doctype html>
     .navlinks{display:flex; gap:6px; align-items:center}
     .navlinks a{font-size:13.5px;color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:9px}
     .navlinks a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+    .home{margin-left:10px;padding-left:14px;border-left:1px solid var(--border);display:flex}
+    .home a{display:flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0}
+    .home a:hover{background:rgba(255,255,255,.06)}
+    .home .logo{width:24px;height:24px;box-shadow:0 0 14px rgba(139,92,246,.45)}
     /* hero */
     header{padding:68px 0 34px}
     .pill{display:inline-flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);
@@ -289,11 +293,12 @@ _LANDING_HTML = """<!doctype html>
 </head>
 <body>
   <nav><div class="wrap inner">
-    <div class="brand"><span class="logo"></span> Trinity</div>
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="logo"></span> Trinity</a>
     <div class="navlinks">
       <a href="/nis2">NIS2</a>
       <a href="/docs">API</a>
       <a href="/about">About</a>
+      <span class="home"><a href="/" title="Home" aria-label="Home"><span class="logo"></span></a></span>
     </div>
   </div></nav>
 

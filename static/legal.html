@@ -18,8 +18,15 @@
        color:var(--ink);text-decoration:none}
   .mark{width:20px;height:20px;border-radius:6px;
        background:conic-gradient(from 210deg,var(--accent),#22d3ee,var(--accent))}
+  header nav{display:flex;align-items:center}
   header nav a{margin-left:18px;font-size:13.5px;color:var(--muted);text-decoration:none}
   header nav a:hover{color:var(--ink)}
+  .home{margin-left:16px;padding-left:16px;border-left:1px solid var(--line);
+       display:flex;align-items:center}
+  .home a{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+       margin:0;border-radius:8px;transition:background .15s}
+  .home a:hover{background:var(--bg)}
+  .home .mark{width:22px;height:22px;box-shadow:0 0 0 1px var(--line)}
   .wrap{max-width:760px;margin:0 auto;padding:34px 20px 60px}
   .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:26px}
   .tabs a{padding:9px 15px;color:var(--muted);text-decoration:none;
@@ -47,7 +54,10 @@
 
 <header><div class="in">
   <a class="brand" href="/"><span class="mark"></span>Trinity</a>
-  <nav><a href="/">Query</a><a href="/nis2">NIS2</a><a href="/docs">API</a></nav>
+  <nav>
+    <a href="/">Query</a><a href="/nis2">NIS2</a><a href="/docs">API</a>
+    <span class="home"><a href="/" title="Home" aria-label="Home"><span class="mark"></span></a></span>
+  </nav>
 </div></header>
 
 <div class="wrap">
