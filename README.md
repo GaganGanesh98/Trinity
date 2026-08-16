@@ -1,11 +1,17 @@
-# ENISA RAG Agent
+# Trinity
 
-Local-first retrieval-augmented QA over **ENISA** cybersecurity publications
-(threat landscapes, NIS2 guidance, AI-security frameworks). Everything runs on your
-machine via [Ollama](https://ollama.com) and a local Neo4j — **no API keys, no paid
-services**.
+**Three retrieval architectures over one corpus — hybrid BM25+vector, Neo4j
+GraphRAG, and MongoDB Atlas Vector Search — scored by the same eval harness.**
 
-The project has three retrieval backbones over the *same* corpus:
+Retrieval-augmented QA over **ENISA** cybersecurity publications (threat
+landscapes, NIS2 guidance, AI-security frameworks). The local backends run
+entirely on your machine via [Ollama](https://ollama.com) and a local Neo4j —
+**no API keys, no paid services**; the Atlas backend is optional and off by
+default.
+
+The name is the point: three retrieval backbones over the *same* corpus, so the
+question "does the choice of retrieval architecture actually matter?" can be
+answered by measurement rather than assertion.
 
 1. **Vector RAG** — `VectorStoreIndex` with hybrid **BM25 + vector** fusion and
    cross-encoder reranking (`rag/indexer.py`).
