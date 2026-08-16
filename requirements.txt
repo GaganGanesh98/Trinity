@@ -27,3 +27,4 @@ sentence-transformers
 # API
 fastapi
 uvicorn[standard]
+python-multipart   # file uploads for POST /assess

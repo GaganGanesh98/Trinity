@@ -18,11 +18,13 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from nis2.assessor import assess
+from nis2.checkpoints import CHECKPOINTS
 from rag.indexer import load_index, query, query_with_sources
 
 logger = logging.getLogger(__name__)
@@ -464,6 +466,70 @@ def handle_query(req: QueryRequest):
     except Exception as e:
         logger.exception("Query failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB — policy documents are small
+
+
+@app.post("/assess")
+def handle_assess(
+    file: UploadFile = File(..., description="Security policy to assess (PDF, TXT or MD)"),
+    checkpoints: str | None = Form(
+        None,
+        description="Optional comma-separated checkpoint ids, e.g. 'NIS2-03,NIS2-05'. "
+        "Omit to assess all thirteen.",
+    ),
+):
+    """Assess an uploaded document against the NIS2 Article 21 requirement domains.
+
+    Returns a per-domain report: status, severity, rationale, and a **verbatim**
+    quote from the uploaded document supporting each finding.
+
+    The upload is chunked and embedded in memory and discarded when the request
+    ends — it is never written to the vector store, and embeddings and generation
+    both run on the local Ollama server.
+
+    Not legal advice: this flags gaps for a human to review, it does not certify
+    compliance.
+    """
+    # Sync `def` for the same reason as /query — the assessment is a long
+    # blocking call that FastAPI will run in its threadpool.
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit.",
+        )
+
+    ids = [c.strip() for c in checkpoints.split(",") if c.strip()] if checkpoints else None
+    try:
+        report = assess(data, file.filename or "upload", checkpoint_ids=ids)
+    except ValueError as e:
+        # Unsupported type, unreadable file, or unknown checkpoint id — all of
+        # these are the caller's input, not a server fault.
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Assessment failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return report.model_dump()
+
+
+@app.get("/assess/checkpoints")
+def list_checkpoints():
+    """The NIS2 requirement domains an assessment covers, with expected evidence."""
+    return [
+        {
+            "id": c.id,
+            "domain": c.domain,
+            "article": c.article,
+            "obligation": c.obligation,
+            "evidence_expected": list(c.evidence),
+        }
+        for c in CHECKPOINTS
+    ]
 
 
 @app.get("/graph/stats", response_model=GraphStatsResponse)

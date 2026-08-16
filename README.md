@@ -58,6 +58,87 @@ Configuration (corpus source, Ollama, Neo4j) lives in `config.py`; secrets in `.
 
 ---
 
+## NIS2 readiness assessment
+
+Searching public regulation is not a product — a search engine already does it.
+The useful question is the one no search engine can answer, because it needs a
+public regulation *and* a private document read together:
+
+> *Does **our** incident response policy meet the NIS2 reporting requirements?*
+
+`POST /assess` takes a security policy, incident response plan or supplier
+policy and returns a per-domain gap report.
+
+```bash
+curl -F "file=@data/samples/sample_security_policy.txt" \
+     http://127.0.0.1:8000/assess | python -m json.tool
+```
+
+```jsonc
+{
+  "document_name": "sample_security_policy.txt",
+  "coverage_pct": 42.3,
+  "high_severity_gaps": 3,
+  "findings": [
+    {
+      "checkpoint_id": "NIS2-04",
+      "domain": "Business continuity and crisis management",
+      "article": "Art. 21(2)(c)",
+      "status": "PARTIAL",
+      "severity": "MEDIUM",
+      "rationale": "Backups are taken and retained, but the document does not state recovery objectives or evidence of restoration testing.",
+      "excerpt": "Backups of all production servers are taken nightly and retained for 30 days.",
+      "excerpt_verified": true
+    }
+  ]
+}
+```
+
+Assess a single domain with `-F "checkpoints=NIS2-03"`. `GET /assess/checkpoints`
+lists all thirteen with the evidence each expects.
+
+### Where the checkpoints come from
+
+The thirteen requirement domains are not invented here — they mirror the
+structure ENISA's *Technical Implementation Guidance* (June 2025) uses to
+decompose the risk-management measures of **NIS2 Article 21(2)**, a document
+that is already in the corpus. Every finding can therefore point at a published
+requirement rather than at a checklist we made up.
+
+### Two guarantees that make it usable
+
+**Nothing is stored.** The upload is chunked and embedded into an in-memory
+index that is discarded when the request ends. It never enters the vector store,
+and embeddings and generation both run on local Ollama — no third-party API sees
+the document. For a company being asked to hand over its internal security
+policy, that property matters more than any feature.
+
+**Every quote is verified.** The model is asked for a verbatim excerpt, and the
+excerpt is checked to be a real substring of the upload (whitespace-normalised,
+since PDF extraction breaks lines mid-sentence). Anything invented is dropped.
+
+Further, a finding claiming `ADDRESSED` or `PARTIAL` **without** a verifiable
+quote is demoted to `UNCLEAR` and marked for manual review. This is not
+hypothetical: on a policy containing no cryptography section at all, llama3.2
+returned `PARTIAL — "covers key management (rotation and storage)"`. It could not
+produce a quote, because there was nothing to quote. In compliance a fabricated
+finding is worse than no tool, so unsupported claims are not presented as
+evidence of coverage.
+
+### Limits
+
+- **Not legal advice, and not a compliance certificate.** It surfaces gaps for a
+  human to review.
+- **Model quality is the binding constraint.** llama3.2 (3B) reasons adequately
+  about presence and absence but misses nuance — on the sample it flagged
+  incident handling as `PARTIAL` without noting the missing Art. 23 24h/72h
+  reporting deadlines, which is the most consequential gap in that document. A
+  larger local model (`qwen2.5:7b`) improves this at the cost of speed and RAM.
+- Roughly 13 seconds per checkpoint, so a full thirteen-domain run takes a few
+  minutes on a laptop.
+
+---
+
 ## GraphRAG
 
 The GraphRAG layer adds a **graph database** alongside the vector store so the system can

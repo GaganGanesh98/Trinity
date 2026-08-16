@@ -1,0 +1,36 @@
+ACME LOGISTICS GMBH — INFORMATION SECURITY POLICY
+Version 2.1 — approved by the Managing Director on 12 March 2025.
+Reviewed annually.
+
+1. SCOPE
+This policy applies to all employees, contractors and systems operated by ACME
+Logistics GmbH.
+
+2. RISK MANAGEMENT
+The IT Manager maintains a risk register. Risks are reviewed once a year and
+scored on a five-point scale for likelihood and impact. Treatment decisions are
+recorded and signed off by the Managing Director.
+
+3. INCIDENT HANDLING
+Suspected security incidents must be reported to the IT helpdesk immediately.
+The IT Manager classifies each incident as Low, Medium or High and escalates
+High incidents to the Managing Director. A log of incidents is kept.
+
+4. BACKUPS
+Backups of all production servers are taken nightly and retained for 30 days.
+Backups are stored on a separate NAS device in the same building.
+
+5. ACCESS CONTROL
+Each employee receives an individual account. Administrator rights are granted
+only to IT staff. Passwords must be at least ten characters long and are changed
+every 90 days.
+
+6. STAFF AWARENESS
+New joiners receive a security briefing during onboarding.
+
+7. SUPPLIERS
+IT services may be procured from approved vendors.
+
+8. PHYSICAL SECURITY
+The office is locked outside business hours and the server room is accessible
+only with a key held by IT staff.
