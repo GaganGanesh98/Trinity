@@ -21,3 +21,7 @@ ai agent/
 
 # OS
 .DS_Store
+
+# Benchmark output (regenerate with `python -m nis2.benchmark`)
+bench_results.json
+bench_after.json

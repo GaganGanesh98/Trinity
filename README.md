@@ -173,6 +173,42 @@ how many escaped being marked ADDRESSED — a false clean bill of health is the
 costly error), and **rationale recall** (did it name the specific omission, such
 as the missing Art. 23 deadlines).
 
+#### Results
+
+| Model | Status accuracy | Gap recall | Rationale recall | Findings quoted | Time |
+| --- | --- | --- | --- | --- | --- |
+| llama3.2 | 69% | 100% | 67% | 62% | 103s |
+| qwen2.5:7b | 23%* | 100% | 67% | 15% | 846s |
+
+**Gap recall is 100% for both**, and it is the metric that matters most: neither
+model ever handed out a false clean bill of health on a checkpoint that was
+genuinely deficient. Errors run toward over-reporting gaps, which costs review
+time rather than creating false assurance.
+
+`llama3.2` is the default: more accurate *and* eight times faster. The bigger
+model is not the better one here.
+
+\* The qwen figure is confounded and should not be read as a judgement
+comparison. It quoted verbatim on only 15% of findings — it paraphrases where
+llama3.2 copies — so the quote-verification rule below fired on most of its
+output. What is being measured there is quoting discipline, not reasoning. A
+fair comparison needs fuzzy quote matching, which is not built yet.
+
+#### What the benchmark changed
+
+The first run scored 38%, and inspecting the misses showed the fault was in the
+rule, not the model. Findings that claimed coverage without a quotable sentence
+were demoted to `UNCLEAR`, but four of the five demotions were checkpoints the
+document genuinely did not address. When a model cannot quote a single
+supporting sentence, the likeliest explanation is that the control is absent —
+not that it is worded ambiguously.
+
+Retargeting the demotion to `NOT_ADDRESSED` lifted status accuracy from **38% to
+69%** with gap recall unchanged at 100%. The cost is visible in the table: the
+document *does* carry an approved, annually-reviewed security policy, and it is
+now reported as a gap because llama3.2 failed to quote it. A false gap costs a
+few minutes of review; a false pass is what makes a compliance tool dangerous.
+
 ### Where the checkpoints come from
 
 The thirteen requirement domains are not invented here — they mirror the

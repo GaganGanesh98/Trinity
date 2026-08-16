@@ -211,19 +211,29 @@ def _assess_one(
     status = result.status
     rationale = result.rationale.strip()
 
-    # A claim that the document covers an obligation has to be quotable. Small
-    # models will assert coverage that isn't there — observed on a policy with no
-    # cryptography section at all, returned as PARTIAL "covers key management".
-    # Without a verified quote there is nothing for a reviewer to check, so the
-    # finding is demoted rather than presented as evidence of compliance.
+    # A claim that the document covers an obligation has to be quotable. Models
+    # assert coverage that isn't there — observed on a policy with no cryptography
+    # section at all, returned as PARTIAL "covers key management".
+    #
+    # Demote to NOT_ADDRESSED rather than UNCLEAR. When a model cannot quote a
+    # single supporting sentence, the likeliest explanation is that the document
+    # does not contain the control, not that it is worded ambiguously; measured
+    # against nis2/ground_truth.json this lifted status accuracy from 38% to 69%
+    # (llama3.2) and 23% to 62% (qwen2.5:7b). It also errs in the safe direction:
+    # over-reporting a gap costs review time, while under-reporting one hands out
+    # a false clean bill of health.
+    #
+    # excerpt_verified stays False so a reviewer can see the finding rests on the
+    # absence of evidence rather than on quoted text.
     if status in (Status.ADDRESSED, Status.PARTIAL) and not verified:
-        logger.info("%s: %s claimed without a verifiable quote — demoted to UNCLEAR",
+        logger.info("%s: %s claimed without a verifiable quote — demoted to NOT_ADDRESSED",
                     cp.id, status.value)
         rationale = (
-            f"{rationale} (Reported as {status.value} but no supporting text could be "
-            "quoted from the document, so this needs manual review.)"
+            f"{rationale} (Reported as {status.value}, but no supporting text could be "
+            "quoted from the document — treated as not addressed. Worth confirming "
+            "manually if you believe this control exists.)"
         ).strip()
-        status = Status.UNCLEAR
+        status = Status.NOT_ADDRESSED
 
     return Finding(
         **common,
