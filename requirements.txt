@@ -14,6 +14,10 @@ llama-index-retrievers-bm25
 llama-index-graph-stores-neo4j
 neo4j
 
+# Cloud vector store — MongoDB Atlas Vector Search (comparison backend)
+llama-index-vector-stores-mongodb
+pymongo[srv]
+
 # Config
 python-dotenv
 

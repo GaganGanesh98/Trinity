@@ -186,17 +186,15 @@ def _load_sidecar_documents(metadata_by_uid: dict[str, dict]) -> list[Document]:
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
-def build_index(*, incremental: bool = False) -> VectorStoreIndex:
+def load_documents() -> list[Document]:
     """
-    Build (or incrementally update) the vector index from PDFs + sidecars.
+    Load the corpus: PDFs from OUTPUT_DIR plus sidecar abstracts, with
+    scraper metadata attached to every Document.
 
-    Args:
-        incremental: if True and an index already exists, only add new docs
-                     via refresh_ref_docs() instead of rebuilding from scratch.
+    Shared by every retrieval backend (local vector store, MongoDB Atlas,
+    graph) so each one indexes the *same* corpus — a precondition for the
+    backend comparison in the README being meaningful.
     """
-    global _index, _nodes
-    _configure_settings()
-
     if not METADATA_FILE.exists():
         raise FileNotFoundError(f"Missing metadata file: {METADATA_FILE}")
 
@@ -208,6 +206,10 @@ def build_index(*, incremental: bool = False) -> VectorStoreIndex:
         input_dir=str(OUTPUT_DIR),
         required_exts=[".pdf"],
         recursive=False,
+        # SimpleDirectoryReader's hidden-file check walks the *whole* path, so
+        # it finds nothing when the checkout sits under a dotted parent
+        # directory. required_exts already restricts this to PDFs.
+        exclude_hidden=False,
         file_metadata=_file_metadata_fn(lookup),
     )
     documents: list[Document] = reader.load_data()
@@ -221,6 +223,21 @@ def build_index(*, incremental: bool = False) -> VectorStoreIndex:
     if not documents:
         raise FileNotFoundError(f"No PDFs found in {OUTPUT_DIR}")
 
+    return documents
+
+
+def build_index(*, incremental: bool = False) -> VectorStoreIndex:
+    """
+    Build (or incrementally update) the vector index from PDFs + sidecars.
+
+    Args:
+        incremental: if True and an index already exists, only add new docs
+                     via refresh_ref_docs() instead of rebuilding from scratch.
+    """
+    global _index, _nodes
+    _configure_settings()
+
+    documents = load_documents()
     splitter = SentenceSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
 
     # Incremental path
@@ -321,6 +338,31 @@ def query(question: str, *, use_hybrid: bool = True) -> str:
     return (response.response or str(response)).strip()
 
 
+def format_sources(response) -> list[dict]:
+    """
+    Deduplicate a response's source nodes into citation records.
+
+    Shared with the Atlas backend so both report citations identically — the
+    eval harness compares source titles across backends.
+    """
+    sources: list[dict] = []
+    seen = set()
+    for node in response.source_nodes:
+        meta = node.metadata or {}
+        title = meta.get("title", "Unknown")
+        url = meta.get("source_url", "")
+        key = (title, url)
+        if key in seen:
+            continue
+        seen.add(key)
+        sources.append({
+            "title": title,
+            "source_url": url,
+            "score": round(node.score or 0.0, 4),
+        })
+    return sources
+
+
 def query_with_sources(question: str) -> dict:
     """
     Like query() but also returns source nodes for citation.
@@ -338,23 +380,7 @@ def query_with_sources(question: str) -> dict:
         engine = _index.as_query_engine(similarity_top_k=RERANK_TOP_K)
 
     response = engine.query(question)
-    sources = []
-    seen = set()
-    for node in response.source_nodes:
-        meta = node.metadata or {}
-        title = meta.get("title", "Unknown")
-        url = meta.get("source_url", "")
-        key = (title, url)
-        if key in seen:
-            continue
-        seen.add(key)
-        sources.append({
-            "title": title,
-            "source_url": url,
-            "score": round(node.score or 0.0, 4),
-        })
-
     return {
         "answer": (response.response or str(response)).strip(),
-        "sources": sources,
+        "sources": format_sources(response),
     }

@@ -5,14 +5,18 @@ Local-first retrieval-augmented QA over **ENISA** cybersecurity publications
 machine via [Ollama](https://ollama.com) and a local Neo4j — **no API keys, no paid
 services**.
 
-The project has two retrieval backbones over the *same* corpus:
+The project has three retrieval backbones over the *same* corpus:
 
 1. **Vector RAG** — `VectorStoreIndex` with hybrid **BM25 + vector** fusion and
    cross-encoder reranking (`rag/indexer.py`).
 2. **GraphRAG** — a **Neo4j** knowledge graph of cybersecurity entities and
    relationships, extracted with a schema-constrained LLM (`rag/graph_indexer.py`).
+3. **MongoDB Atlas Vector Search** — the same chunks in a managed cloud vector
+   store, with `$vectorSearch` + `$search` fused **server-side** by Atlas
+   (`rag/mongo_indexer.py`). Optional; off unless `MONGODB_URI` is set.
 
-A FastAPI service exposes both, and an eval harness scores retrieval quality.
+A FastAPI service exposes them, and an eval harness scores retrieval quality
+per backend.
 
 ## Requirements
 
@@ -101,6 +105,80 @@ curl -s localhost:8000/graph/stats | python -m json.tool
 
 Or explore visually in the Neo4j browser at <http://localhost:7474>
 (user `neo4j`, password from `.env`).
+
+---
+
+## MongoDB Atlas Vector Search
+
+The only backend here that is **not** local-first. It exists to be *compared*
+against the local vector store, not to replace it: same corpus, same chunk size,
+same `nomic-embed-text` embeddings, same candidate count, same cross-encoder
+reranker. Exactly one thing changes — **where the similarity search runs**.
+
+| | local | atlas |
+| --- | --- | --- |
+| Chunk storage | `./rag_store` (on disk) | Atlas collection |
+| Lexical search | BM25, in-process | Atlas `$search` |
+| Vector search | in-process | Atlas `$vectorSearch` |
+| Fusion | LlamaIndex, in Python | Reciprocal Rank Fusion, server-side |
+
+**Caveat worth stating in any writeup:** embeddings are still generated locally
+by Ollama, so every Atlas query pays a network round trip the local store does
+not. Treat retrieval quality as the primary metric and latency as directional.
+
+### 1. Set up the cluster
+
+In the [Atlas UI](https://cloud.mongodb.com), on a free **M0** cluster:
+
+1. **Database Access** → *Add New Database User* → password auth. Give it
+   *Read and write to any database*.
+2. **Network Access** → *Add IP Address* → *Add Current IP Address*.
+   (Re-add it when your IP changes — a stalled connection is usually this.)
+3. **Clusters** → *Connect* → *Drivers* → *Python*, and copy the connection
+   string.
+
+Put it in `.env` (never commit it — `.env` is gitignored):
+
+```bash
+MONGODB_URI="mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority"
+```
+
+Percent-encode any of `@ : / ? # [ ]` in the password, or the URI won't parse.
+
+Verify before indexing anything:
+
+```bash
+python main.py --mongo-status
+```
+
+### 2. Build the index
+
+```bash
+python main.py --rebuild-mongo
+```
+
+This embeds `enisa_docs/` locally, writes the chunks to Atlas, then creates two
+search indexes (`vector_index` for `$vectorSearch`, `fulltext_index` for
+`$search`). Index creation is idempotent and waits for the build to finish.
+
+The vector index declares **768 dimensions** (`nomic-embed-text`). Atlas rejects
+vectors of a different size, so changing the embedding model means dropping the
+index and rebuilding.
+
+### 3. Compare the backends
+
+```bash
+python eval.py --backend local
+python eval.py --backend atlas
+python eval.py --backend all --out results.json   # both + markdown table
+```
+
+`--backend all` prints a table ready to paste here:
+
+| Backend | Source recall | Answer recall | Avg latency |
+| --- | --- | --- | --- |
+| local | _run it_ | | |
+| atlas | _run it_ | | |
 
 ### Retrieval modes & evaluation
 

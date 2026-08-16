@@ -108,3 +108,20 @@ NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "enisa-graph-dev")
 NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
+
+
+# ── MongoDB Atlas (cloud vector store) — used by rag/mongo_indexer.py ────────
+# The one backend in this project that is NOT local-first: Atlas Vector Search
+# runs the similarity query server-side, so it exists to be *compared* against
+# the local vector store rather than to replace it. There is no default URI —
+# without MONGODB_URI in .env the Atlas backend stays off and nothing else in
+# the pipeline changes.
+MONGODB_URI = os.getenv("MONGODB_URI", "")
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "enisa_rag")
+MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "chunks")
+MONGODB_VECTOR_INDEX = os.getenv("MONGODB_VECTOR_INDEX", "vector_index")
+
+# nomic-embed-text emits 768-dim vectors. The Atlas search index declares this
+# dimension at creation time and rejects mismatched vectors, so changing the
+# embedding model means dropping and recreating the index.
+EMBED_DIMENSIONS = 768

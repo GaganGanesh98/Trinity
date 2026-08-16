@@ -250,6 +250,17 @@ if __name__ == "__main__":
         help="Only process the first N PDFs when building the graph (fast iteration).",
     )
     parser.add_argument(
+        "--rebuild-mongo",
+        action="store_true",
+        help="Embed enisa_docs/ into MongoDB Atlas Vector Search and create the "
+        "search indexes. Requires MONGODB_URI in .env.",
+    )
+    parser.add_argument(
+        "--mongo-status",
+        action="store_true",
+        help="Check the Atlas connection, chunk count, and search indexes, then exit.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be downloaded; skip actual downloads.",
@@ -261,6 +272,22 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Read-only probe — runs alone and exits, so it stays usable when the rest
+    # of the pipeline (Ollama, Neo4j) isn't up.
+    if args.mongo_status:
+        import json as _json
+
+        from rag.mongo_indexer import ping
+
+        try:
+            print(_json.dumps(ping(), indent=2))
+        except Exception as e:
+            # A misconfigured URI or an unreachable cluster is a normal setup
+            # state here, not a bug — report it without a traceback.
+            print(f"Atlas check failed: {e}")
+            raise SystemExit(1)
+        raise SystemExit(0)
+
     focus: list[str] | None = None
     if args.keywords is not None:
         focus = [k.strip() for k in args.keywords.split(",") if k.strip()]
@@ -270,7 +297,7 @@ if __name__ == "__main__":
     # A bare store rebuild (--rebuild-index / --rebuild-graph) skips the network
     # scrape, so you can re-index or rebuild the graph offline. Any scrape-shaped
     # flag re-enables scraping (scrape THEN rebuild), preserving prior behavior.
-    store_rebuild = args.rebuild_index or args.rebuild_graph
+    store_rebuild = args.rebuild_index or args.rebuild_graph or args.rebuild_mongo
     scrape_flags = (
         args.seeds_only
         or args.dry_run
@@ -309,3 +336,12 @@ if __name__ == "__main__":
 
             print("\nBuilding knowledge graph (Neo4j)...")
             build_graph(limit=args.graph_limit)
+
+    if args.rebuild_mongo:
+        if args.dry_run:
+            print("\nSkipping --rebuild-mongo (dry-run mode).")
+        else:
+            from rag.mongo_indexer import build_index as build_mongo_index
+
+            print("\nBuilding MongoDB Atlas vector index...")
+            build_mongo_index()

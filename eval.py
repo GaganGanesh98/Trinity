@@ -2,7 +2,8 @@
 Minimal eval harness for RAG retrieval quality.
 
 Run:
-    python eval.py                     # uses eval_questions.json
+    python eval.py                     # local backend, uses eval_questions.json
+    python eval.py --backend atlas     # MongoDB Atlas Vector Search backend
     python eval.py --file my_qs.json   # custom question set
     python eval.py --verbose           # print full answers
 
@@ -10,6 +11,10 @@ Each question has:
     - question: the natural-language query
     - expected_sources: list of substrings that should appear in source titles
     - expected_answer_contains: list of substrings the answer should contain (optional)
+
+Backends index the same corpus with the same chunking, embeddings, candidate
+count and reranker, so scores are directly comparable. Latency is not strictly
+comparable: `atlas` pays a network round trip per query that `local` does not.
 """
 
 from __future__ import annotations
@@ -20,13 +25,26 @@ import sys
 import time
 from pathlib import Path
 
-from rag.indexer import load_index, query_with_sources
+BACKENDS = ("local", "atlas")
 
 DEFAULT_EVAL_FILE = Path(__file__).parent / "eval_questions.json"
 
 
-def run_eval(eval_file: Path, *, verbose: bool = False) -> dict:
+def _get_backend(name: str):
+    """Return (load_index, query_with_sources) for the named backend."""
+    if name == "local":
+        from rag.indexer import load_index, query_with_sources
+    elif name == "atlas":
+        from rag.mongo_indexer import load_index, query_with_sources
+    else:
+        raise ValueError(f"Unknown backend {name!r}. Choose from {BACKENDS}.")
+    return load_index, query_with_sources
+
+
+def run_eval(eval_file: Path, *, verbose: bool = False, backend: str = "local") -> dict:
     questions = json.loads(eval_file.read_text())
+    load_index, query_with_sources = _get_backend(backend)
+    print(f"Backend: {backend}")
     load_index()
 
     results = []
@@ -89,7 +107,7 @@ def run_eval(eval_file: Path, *, verbose: bool = False) -> dict:
 
     # Summary
     print(f"\n{'='*60}")
-    print("SUMMARY")
+    print(f"SUMMARY — backend: {backend}")
     print(f"{'='*60}")
     src_recall = total_source_hits / total_source_expected if total_source_expected else 1.0
     ans_recall = total_answer_hits / total_answer_expected if total_answer_expected else 1.0
@@ -99,6 +117,7 @@ def run_eval(eval_file: Path, *, verbose: bool = False) -> dict:
     print(f"Avg latency:   {avg_latency:.1f}s")
 
     return {
+        "backend": backend,
         "source_recall": round(src_recall, 4),
         "answer_recall": round(ans_recall, 4),
         "avg_latency_s": round(avg_latency, 2),
@@ -106,14 +125,54 @@ def run_eval(eval_file: Path, *, verbose: bool = False) -> dict:
     }
 
 
+def _print_comparison(summaries: list[dict]) -> None:
+    """Markdown table, ready to paste into the README."""
+    print(f"\n{'='*60}")
+    print("BACKEND COMPARISON")
+    print(f"{'='*60}\n")
+    print("| Backend | Source recall | Answer recall | Avg latency |")
+    print("| --- | --- | --- | --- |")
+    for s in summaries:
+        print(
+            f"| {s['backend']} | {s['source_recall']:.0%} "
+            f"| {s['answer_recall']:.0%} | {s['avg_latency_s']:.1f}s |"
+        )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RAG eval harness")
     parser.add_argument("--file", type=Path, default=DEFAULT_EVAL_FILE)
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--backend",
+        choices=[*BACKENDS, "all"],
+        default="local",
+        help="Retrieval backend to score. 'all' runs each in turn and prints a "
+        "comparison table (default: local).",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="Write the summary (or summaries) to FILE as JSON.",
+    )
     args = parser.parse_args()
 
     if not args.file.exists():
         print(f"Eval file not found: {args.file}")
         sys.exit(1)
 
-    run_eval(args.file, verbose=args.verbose)
+    targets = list(BACKENDS) if args.backend == "all" else [args.backend]
+    summaries = [
+        run_eval(args.file, verbose=args.verbose, backend=b) for b in targets
+    ]
+
+    if len(summaries) > 1:
+        _print_comparison(summaries)
+
+    if args.out:
+        args.out.write_text(json.dumps(
+            summaries if len(summaries) > 1 else summaries[0], indent=2
+        ))
+        print(f"\nWrote {args.out}")
