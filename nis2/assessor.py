@@ -270,6 +270,11 @@ def assess(
         checkpoint_ids: optional subset, e.g. ["NIS2-03"] to assess one domain.
         model: override the Ollama model (defaults to config.NIS2_LLM_MODEL).
     """
+    # Validate the requested checkpoints before doing any expensive work: a bad
+    # id is a caller error, and embedding the document first would spend a full
+    # pass over the corpus before discovering it.
+    checkpoints = get_checkpoints(checkpoint_ids)
+
     _configure_settings()
 
     docs, document_text = load_document_bytes(data, filename)
@@ -282,6 +287,6 @@ def assess(
     llm = _assessment_llm(model)
     findings = [
         _assess_one(cp, doc_retriever, guidance, document_text, llm)
-        for cp in get_checkpoints(checkpoint_ids)
+        for cp in checkpoints
     ]
     return Report(document_name=filename, findings=findings, model=llm.model).finalise()

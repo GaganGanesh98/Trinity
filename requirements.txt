@@ -24,6 +24,10 @@ python-dotenv
 # Reranking
 sentence-transformers
 
+# Tests
+pytest
+httpx              # fastapi.testclient
+
 # API
 fastapi
 uvicorn[standard]

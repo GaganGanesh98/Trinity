@@ -58,6 +58,55 @@ Configuration (corpus source, Ollama, Neo4j) lives in `config.py`; secrets in `.
 
 ---
 
+## Tests
+
+```bash
+python -m pytest
+```
+
+95 tests, about a second, and **provably offline** — an autouse fixture in
+`tests/conftest.py` turns any accidental outbound request into a failure. That
+guard is not tidiness: without it an SSRF test can pass for the wrong reason,
+because a blocked host returning 404 raises the same exception as a host that was
+correctly refused.
+
+The suite deliberately covers the parts where being wrong is expensive:
+
+| Area | Why it is tested |
+| --- | --- |
+| `nis2/scope.py` | Legal determinations. Assertions encode the directive's tests, so a refactor that changes an answer fails rather than silently redefining scope. |
+| `verify_excerpt` | The anti-hallucination guarantee. If it accepts text absent from the document, the product's central claim is false. |
+| `nis2/fetch.py` | Ten SSRF vectors, each asserted to be refused *before* any connection is attempted. |
+| API surface | Rejection paths, the catalogues the UI builds itself from, and that no endpoint exposes a Python function name. |
+
+Model-dependent behaviour is **not** here — it belongs in `nis2/benchmark.py`,
+which takes minutes and is scored against labelled ground truth. Mixing the two
+would give a suite too slow to run on every change.
+
+---
+
+## Loop automation
+
+`.claude/loop.md` defines what a bare `/loop` does in this repo: unit suite →
+server health → retrieval regression → assessment regression → Atlas health,
+ordered cheapest-first so a bounded loop reaches the fast checks before spending
+its budget on the slow ones.
+
+This project is better suited to looping than most, because it has verification
+signals an agent cannot fabricate. `eval_questions.json` and
+`nis2/ground_truth.json` are hand-labelled, so an agent cannot quietly make its
+own numbers improve — the usual failure mode where the agent writes both the code
+and the test is much harder here. Both files are therefore protected: the
+`PreToolUse` hook in `.claude/settings.json` blocks edits to them, alongside
+force-pushes, `.env` access, Atlas index drops and unprompted rebuilds.
+
+The reusable half lives at `~/.claude/agents/integration-verifier.md` rather than
+in this repo — it is stack-agnostic and useful in every project. Its load-bearing
+line is `disallowedTools: Write, Edit`: an evaluator that can edit code will
+eventually edit code to make itself pass.
+
+---
+
 ## Am I in scope? (`/scope`)
 
 Scope determination is **rule-based with no LLM in the path**. It follows a small
