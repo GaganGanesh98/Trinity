@@ -25,7 +25,9 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 import requests
+from neo4j.exceptions import ServiceUnavailable
 
+from config import NEO4J_URI
 from nis2.assessor import assess
 from nis2.checkpoints import CHECKPOINTS
 from nis2.fetch import FetchError, fetch_document
@@ -711,6 +713,19 @@ def graph_stats():
         from rag.graph_indexer import get_graph_stats
 
         return GraphStatsResponse(**get_graph_stats())
+    except ServiceUnavailable:
+        # Neo4j not running is the normal state when Docker is down, and the
+        # graph layer is optional. Report it in one line rather than dumping a
+        # driver traceback that reads like the application broke.
+        logger.warning("Graph stats unavailable: Neo4j is not reachable at %s", NEO4J_URI)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The knowledge graph is not running. Start it with "
+                "`docker compose up -d neo4j`. This layer is optional — retrieval "
+                "and NIS2 assessment work without it."
+            ),
+        )
     except Exception as e:
         logger.exception("Graph stats failed")
         raise HTTPException(
