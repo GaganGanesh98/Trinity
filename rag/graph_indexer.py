@@ -261,13 +261,38 @@ class SchemaEnumPathExtractor(TransformComponent):
 
 # ── Graph store connection ────────────────────────────────────────────────────
 
-def _graph_store() -> Neo4jPropertyGraphStore:
-    """Connect to the local Neo4j (docker-compose). Credentials from config/.env."""
+# Neo4j is optional: the graph layer only exists when the docker-compose service
+# is running. The driver's defaults assume a transient outage and retry with
+# exponential backoff for 30s, which turns "Docker isn't started" into a half
+# minute of stalled requests and log noise. Fail fast instead — an absent
+# optional service should report itself immediately.
+NEO4J_CONNECT_TIMEOUT_S = 3.0
+NEO4J_RETRY_TIMEOUT_S = 2.0
+
+
+def _graph_store(*, fail_fast: bool = False) -> Neo4jPropertyGraphStore:
+    """Connect to the local Neo4j (docker-compose). Credentials from config/.env.
+
+    Args:
+        fail_fast: use short timeouts, for read-only status checks where a slow
+            failure is worse than no answer. Leave False for index builds, which
+            are long-running and should tolerate a blip.
+    """
+    # neo4j_kwargs is **kwargs on the store and is forwarded to the driver, so
+    # these go in at the top level rather than nested under a dict.
+    driver_kwargs: dict = {}
+    if fail_fast:
+        driver_kwargs = {
+            "connection_timeout": NEO4J_CONNECT_TIMEOUT_S,
+            "max_transaction_retry_time": NEO4J_RETRY_TIMEOUT_S,
+        }
+
     return Neo4jPropertyGraphStore(
         username=NEO4J_USERNAME,
         password=NEO4J_PASSWORD,
         url=NEO4J_URI,
         database=NEO4J_DATABASE,
+        **driver_kwargs,
     )
 
 
@@ -387,8 +412,11 @@ def get_graph_stats() -> dict[str, Any]:
 
     LlamaIndex labels entity nodes with `__Entity__` plus their domain type; the
     internal `__*__` labels are filtered out so only domain types are reported.
+
+    Read-only status check, so it fails fast rather than retrying: Neo4j being
+    absent is the normal state when Docker is not running.
     """
-    graph_store = _graph_store()
+    graph_store = _graph_store(fail_fast=True)
 
     nodes_by_type: dict[str, int] = {}
     for row in graph_store.structured_query(

@@ -17,12 +17,21 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+import requests
+from neo4j.exceptions import ServiceUnavailable
+
+from config import NEO4J_URI
+from nis2.assessor import assess
+from nis2.checkpoints import CHECKPOINTS
+from nis2.fetch import FetchError, fetch_document
+from nis2.scope import ScopeInput, determine, sectors
 from rag.indexer import load_index, query, query_with_sources
 
 logger = logging.getLogger(__name__)
@@ -48,10 +57,41 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# Tag order here is the order sections appear in the reference, so it reads as a
+# path through the product rather than as an alphabetical dump.
+TAGS = [
+    {
+        "name": "NIS2",
+        "description": (
+            "Determine whether NIS2 applies to an entity, and assess a security "
+            "policy against the Article 21 requirement domains. Start with "
+            "**Check scope**; it needs no document and returns instantly."
+        ),
+    },
+    {
+        "name": "Query",
+        "description": (
+            "Ask a question about EU cybersecurity regulation. Answers are grounded "
+            "in ENISA publications and returned with the sources used."
+        ),
+    },
+    {
+        "name": "Knowledge graph",
+        "description": "Entity and relationship counts from the graph retrieval layer.",
+    },
+    {"name": "System", "description": "Service status."},
+]
+
 app = FastAPI(
-    title="ENISA RAG Agent API",
+    title="Trinity API",
     version="0.2.0",
-    description="Query ENISA cybersecurity publications via hybrid RAG.",
+    description=(
+        "Retrieval and NIS2 readiness analysis over EU cybersecurity regulation.\n\n"
+        "All endpoints are unauthenticated and run locally. Submitted documents are "
+        "held in memory for the request and never stored — see "
+        "[Privacy](/privacy) and [Terms](/terms)."
+    ),
+    openapi_tags=TAGS,
     lifespan=lifespan,
     docs_url=None,   # replaced by the custom Scalar reference below
     redoc_url=None,
@@ -153,7 +193,7 @@ async def api_reference() -> HTMLResponse:
         <!doctype html>
         <html>
           <head>
-            <title>ENISA RAG Agent API — Reference</title>
+            <title>Trinity API Reference</title>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
             <style>body{margin:0;background:#0b0f19;}</style>
@@ -176,7 +216,7 @@ _LANDING_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ENISA RAG Agent</title>
+  <title>Trinity</title>
   <style>
     :root{
       --bg:#0a0e1a; --panel:rgba(20,26,40,.72); --panel-solid:#121826;
@@ -212,6 +252,10 @@ _LANDING_HTML = """<!doctype html>
     .navlinks{display:flex; gap:6px; align-items:center}
     .navlinks a{font-size:13.5px;color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:9px}
     .navlinks a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+    .home{margin-left:10px;padding-left:14px;border-left:1px solid var(--border);display:flex}
+    .home a{display:flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0}
+    .home a:hover{background:rgba(255,255,255,.06)}
+    .home .logo{width:24px;height:24px;box-shadow:0 0 14px rgba(139,92,246,.45)}
     /* hero */
     header{padding:68px 0 34px}
     .pill{display:inline-flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);
@@ -282,24 +326,25 @@ _LANDING_HTML = """<!doctype html>
 </head>
 <body>
   <nav><div class="wrap inner">
-    <div class="brand"><span class="logo"></span> ENISA RAG Agent</div>
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="logo"></span> Trinity</a>
     <div class="navlinks">
-      <a href="/docs">API Reference</a>
-      <a href="/graph/stats">Graph</a>
-      <a href="https://github.com/GaganGanesh98" target="_blank" rel="noopener">GitHub</a>
+      <a href="/nis2">NIS2</a>
+      <a href="/docs">API</a>
+      <a href="/about">About</a>
+      <span class="home"><a href="/" title="Home" aria-label="Home"><span class="logo"></span></a></span>
     </div>
   </div></nav>
 
   <div class="wrap">
     <header>
       <span class="pill"><span class="dot" id="dot"></span><span id="statusText">connecting…</span><span style="color:var(--faint)">·</span><span id="uptime">v0.2.0</span></span>
-      <h1>Ask the ENISA<br>cybersecurity corpus</h1>
-      <p class="lead">Hybrid retrieval-augmented QA over ENISA publications — BM25 + vector fusion,
-        cross-encoder reranking, and a Neo4j knowledge-graph layer. Runs fully local via Ollama, no API keys.</p>
+      <h1>EU cybersecurity<br>regulation, answered</h1>
+      <p class="lead">Cited answers from ENISA publications, and NIS2 readiness analysis
+        for your own policies. Runs locally — documents are never stored.</p>
       <div class="cta">
-        <a class="btn primary" href="#console">Try it live ↓</a>
-        <a class="btn ghost" href="/docs">API Reference</a>
-        <a class="btn ghost" href="/openapi.json">OpenAPI</a>
+        <a class="btn primary" href="/nis2">Check NIS2 readiness</a>
+        <a class="btn ghost" href="#console">Ask a question</a>
+        <a class="btn ghost" href="/docs">API</a>
       </div>
 
       <div class="stats">
@@ -345,8 +390,9 @@ _LANDING_HTML = """<!doctype html>
     </section>
 
     <footer>
-      <span>Built by Gagan Ganesh · local-first energy &amp; security AI</span>
-      <span><a href="https://github.com/GaganGanesh98" target="_blank" rel="noopener">github.com/GaganGanesh98</a></span>
+      <span>Trinity</span>
+      <span><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+        · <a href="https://github.com/GaganGanesh98/Trinity" target="_blank" rel="noopener">GitHub</a></span>
     </footer>
   </div>
 
@@ -440,7 +486,7 @@ async def landing() -> HTMLResponse:
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
-@app.post("/query", response_model=QueryResponse)
+@app.post("/query", response_model=QueryResponse, tags=["Query"], summary="Ask a question")
 def handle_query(req: QueryRequest):
     # Sync `def` on purpose: query_with_sources() is blocking and the hybrid
     # QueryFusionRetriever runs nested async internally. FastAPI runs sync path
@@ -466,15 +512,220 @@ def handle_query(req: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/graph/stats", response_model=GraphStatsResponse)
-def graph_stats():
-    """Node/edge counts by type for the Neo4j knowledge graph (GraphRAG layer).
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB — policy documents are small
 
-    Sync `def`: does blocking Neo4j I/O, so let FastAPI run it in the threadpool."""
+
+@app.post("/assess", tags=["NIS2"], summary="Assess an uploaded policy")
+def handle_assess(
+    file: UploadFile = File(..., description="Security policy to assess (PDF, TXT or MD)"),
+    checkpoints: str | None = Form(
+        None,
+        description="Optional comma-separated checkpoint ids, e.g. 'NIS2-03,NIS2-05'. "
+        "Omit to assess all thirteen.",
+    ),
+):
+    """Assess an uploaded policy against the NIS2 Article 21 requirement domains."""
+    # Sync def as with /query: a long blocking call, run in FastAPI's threadpool.
+    # Uploads are held in memory only — see nis2/assessor.py.
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit.",
+        )
+
+    ids = [c.strip() for c in checkpoints.split(",") if c.strip()] if checkpoints else None
+    try:
+        report = assess(data, file.filename or "upload", checkpoint_ids=ids)
+    except ValueError as e:
+        # Unsupported type, unreadable file, or unknown checkpoint id — all of
+        # these are the caller's input, not a server fault.
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Assessment failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return report.model_dump()
+
+
+class AssessUrlRequest(BaseModel):
+    url: str = Field(description="Public link to a policy: PDF, text file, or HTML page.")
+    checkpoints: list[str] | None = Field(
+        None, description="Optional subset of checkpoint ids, e.g. ['NIS2-03']."
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"url": "https://example.com/security-policy.pdf"}}
+    )
+
+
+@app.post("/assess/url", tags=["NIS2"], summary="Assess a policy from a URL")
+def handle_assess_url(req: AssessUrlRequest):
+    """Assess a policy from a URL. Accepts PDF, text, or an HTML page."""
+    # Fetch is SSRF-guarded — see nis2/fetch.py.
+    try:
+        data, filename = fetch_document(req.url)
+    except FetchError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch the URL: {e}")
+
+    try:
+        report = assess(data, filename, checkpoint_ids=req.checkpoints)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Assessment failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {**report.model_dump(), "source_url": req.url}
+
+
+@app.get("/assess/checkpoints", tags=["NIS2"], summary="List requirement domains")
+def list_checkpoints():
+    """List the NIS2 requirement domains an assessment covers."""
+    return [
+        {
+            "id": c.id,
+            "domain": c.domain,
+            "article": c.article,
+            "obligation": c.obligation,
+            "evidence_expected": list(c.evidence),
+        }
+        for c in CHECKPOINTS
+    ]
+
+
+class ScopeRequest(BaseModel):
+    """Answers to the scope questionnaire. Everything except sector is optional."""
+
+    sector: str = Field(description="Annex I/II sector, e.g. 'health'. See GET /scope/sectors.")
+    subsector: str | None = None
+    employees: int | None = Field(None, ge=0)
+    annual_turnover_eur: float | None = Field(None, ge=0)
+    balance_sheet_eur: float | None = Field(None, ge=0)
+    flags: dict[str, bool] = Field(
+        default_factory=dict,
+        description="Art. 2(2) size-cap criteria, e.g. {'is_dns_or_tld_provider': true}.",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "sector": "health",
+                "subsector": "healthcare providers",
+                "employees": 800,
+                "annual_turnover_eur": 90000000,
+                "balance_sheet_eur": 70000000,
+                "flags": {},
+            }
+        }
+    )
+
+
+@app.post("/scope", tags=["NIS2"], summary="Check scope")
+def handle_scope(req: ScopeRequest):
+    """Determine whether an entity is in NIS2 scope, and its classification."""
+    result = determine(
+        ScopeInput(
+            sector=req.sector,
+            subsector=req.subsector,
+            employees=req.employees,
+            annual_turnover_eur=req.annual_turnover_eur,
+            balance_sheet_eur=req.balance_sheet_eur,
+            flags=req.flags,
+        )
+    )
+    return {
+        "classification": result.classification.value,
+        "in_scope": result.in_scope,
+        "size": result.size.value if result.size else None,
+        "annex": result.annex,
+        "reasoning": result.reasoning,
+        "caveats": result.caveats,
+        "obligations": result.obligations,
+        "disclaimer": result.disclaimer,
+    }
+
+
+@app.get("/scope/sectors", tags=["NIS2"], summary="List sectors and criteria")
+def scope_sectors():
+    """List Annex I/II sectors and the Article 2(2) criteria."""
+    return sectors()
+
+
+_STATIC = Path(__file__).parent / "static"
+
+
+def _serve(name: str) -> HTMLResponse:
+    page = _STATIC / name
+    if not page.exists():
+        raise HTTPException(status_code=404, detail=f"UI asset missing: static/{name}")
+    return HTMLResponse(page.read_text())
+
+
+@app.get("/nis2", response_class=HTMLResponse, include_in_schema=False)
+def nis2_ui() -> HTMLResponse:
+    return _serve("nis2.html")
+
+
+def _legal_page(active: str, title: str) -> HTMLResponse:
+    """Render one section of the shared About/Privacy/Terms page.
+
+    A single template holds all three so the shell, tab bar and styling stay in
+    one place; the requested section is revealed and the others hidden server-side
+    rather than by script, so each page is a real URL that renders without JS.
+    """
+    html = (_STATIC / "legal.html").read_text()
+    sections = ("ABOUT", "PRIVACY", "TERMS")
+    repl = {"{{TITLE}}": title}
+    for s in sections:
+        repl[f"{{{{HIDE_{s}}}}}"] = "" if s == active else "hidden"
+        repl[f"{{{{CUR_{s}}}}}"] = 'aria-current="page"' if s == active else ""
+    for k, v in repl.items():
+        html = html.replace(k, v)
+    return HTMLResponse(html)
+
+
+@app.get("/about", response_class=HTMLResponse, include_in_schema=False)
+def about_page() -> HTMLResponse:
+    return _legal_page("ABOUT", "About")
+
+
+@app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+def privacy_page() -> HTMLResponse:
+    return _legal_page("PRIVACY", "Privacy")
+
+
+@app.get("/terms", response_class=HTMLResponse, include_in_schema=False)
+def terms_page() -> HTMLResponse:
+    return _legal_page("TERMS", "Terms")
+
+
+@app.get("/graph/stats", response_model=GraphStatsResponse, tags=["Knowledge graph"],
+          summary="Graph statistics")
+def graph_stats():
+    """Node and edge counts by type for the knowledge graph."""
+    # Sync def: blocking Neo4j I/O, so FastAPI runs it in the threadpool.
     try:
         from rag.graph_indexer import get_graph_stats
 
         return GraphStatsResponse(**get_graph_stats())
+    except ServiceUnavailable:
+        # Neo4j not running is the normal state when Docker is down, and the
+        # graph layer is optional. Report it in one line rather than dumping a
+        # driver traceback that reads like the application broke.
+        logger.warning("Graph stats unavailable: Neo4j is not reachable at %s", NEO4J_URI)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The knowledge graph is not running. Start it with "
+                "`docker compose up -d neo4j`. This layer is optional — retrieval "
+                "and NIS2 assessment work without it."
+            ),
+        )
     except Exception as e:
         logger.exception("Graph stats failed")
         raise HTTPException(
@@ -487,7 +738,7 @@ def graph_stats():
         )
 
 
-@app.get("/health")
+@app.get("/health", tags=["System"], summary="Health check")
 async def health():
     return {
         "status": "ok",

@@ -1,0 +1,248 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>NIS2 Readiness — Trinity</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#fbfbfd; --panel:#fff; --ink:#16181d; --muted:#6a707c; --line:#e4e6eb;
+    --accent:#2b5cff; --ok:#1a7f4b; --warn:#b06a00; --bad:#c02626; --unclear:#5a5f6a;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0f1115;--panel:#171a20;--ink:#e9eaee;--muted:#959cab;--line:#282c34;
+          --accent:#6c8cff;--ok:#4ec27f;--warn:#e0a33c;--bad:#ff6b6b;--unclear:#98a0ad;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+  a{color:var(--accent)}
+  header{border-bottom:1px solid var(--line);background:var(--panel)}
+  header .in{max-width:880px;margin:0 auto;padding:0 20px;height:56px;
+       display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:-.01em;
+       color:var(--ink);text-decoration:none}
+  .mark{width:20px;height:20px;border-radius:6px;
+       background:conic-gradient(from 210deg,var(--accent),#22d3ee,var(--accent))}
+  header nav{display:flex;align-items:center}
+  header nav a{margin-left:18px;font-size:13.5px;color:var(--muted);text-decoration:none}
+  header nav a:hover{color:var(--ink)}
+  .home{margin-left:16px;padding-left:16px;border-left:1px solid var(--line);
+       display:flex;align-items:center}
+  .home a{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+       margin:0;border-radius:8px;transition:background .15s}
+  .home a:hover{background:var(--bg)}
+  .home .mark{width:22px;height:22px;box-shadow:0 0 0 1px var(--line)}
+  .wrap{max-width:880px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:23px;margin:0 0 20px;letter-spacing:-.02em}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px}
+  .tab{padding:9px 15px;border:0;background:none;color:var(--muted);cursor:pointer;
+       font:inherit;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
+  label{display:block;font-size:13px;font-weight:600;margin:15px 0 5px}
+  label:first-of-type{margin-top:0}
+  input,select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;
+       background:var(--bg);color:var(--ink);font:inherit}
+  .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  @media(max-width:640px){.row{grid-template-columns:1fr}}
+  .or{margin:15px 0 0;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .checks{display:grid;gap:6px;margin-top:6px}
+  .checks label{display:flex;gap:8px;align-items:flex-start;font-weight:400;font-size:13.5px;margin:0}
+  .checks input{width:auto;margin-top:3px}
+  button.go{margin-top:20px;padding:10px 20px;border:0;border-radius:7px;background:var(--accent);
+       color:#fff;font:inherit;font-weight:600;cursor:pointer}
+  button.go:disabled{opacity:.5;cursor:progress}
+  .out:not(:empty){margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+  .verdict{padding:14px 16px;border-radius:9px;background:var(--bg);
+       border:1px solid var(--line);margin-bottom:16px}
+  .verdict h2{margin:0;font-size:19px}
+  .verdict p{margin:3px 0 0;color:var(--muted);font-size:13.5px}
+  .ESSENTIAL{border-left:3px solid var(--bad)}
+  .IMPORTANT{border-left:3px solid var(--warn)}
+  .LIKELY_OUT_OF_SCOPE,.OUT_OF_SCOPE{border-left:3px solid var(--ok)}
+  h3{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+       margin:20px 0 8px;font-weight:600}
+  ul{margin:0;padding-left:19px}li{margin:5px 0}
+  details{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+  summary{cursor:pointer;font-size:13.5px;color:var(--muted)}
+  details ul{margin-top:9px}
+  .stats{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:18px}
+  .stats div{font-size:12px;color:var(--muted)}
+  .stats b{display:block;color:var(--ink);font-size:20px;font-weight:650;letter-spacing:-.02em}
+  .finding{border:1px solid var(--line);border-radius:9px;padding:13px 15px;margin-bottom:9px}
+  .fhead{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .fdom{font-weight:600}
+  .art{color:var(--muted);font-size:12px}
+  .pill{font-size:10.5px;font-weight:700;letter-spacing:.05em;padding:2px 8px;
+       border-radius:20px;border:1px solid;white-space:nowrap}
+  .p-ADDRESSED{color:var(--ok);border-color:var(--ok)}
+  .p-PARTIAL{color:var(--warn);border-color:var(--warn)}
+  .p-NOT_ADDRESSED{color:var(--bad);border-color:var(--bad)}
+  .p-UNCLEAR{color:var(--unclear);border-color:var(--unclear)}
+  .rat{margin:8px 0 0;font-size:14px}
+  blockquote{margin:9px 0 0;padding:7px 12px;border-left:2px solid var(--line);
+       background:var(--bg);border-radius:0 6px 6px 0;font-size:13px;color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);margin-top:5px}
+  .err{color:var(--bad);margin-top:14px;font-size:14px}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid var(--line);
+       border-top-color:var(--accent);border-radius:50%;animation:s .7s linear infinite;margin-right:7px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  footer{border-top:1px solid var(--line);margin-top:50px}
+  footer .in{max-width:880px;margin:0 auto;padding:18px 20px;display:flex;
+       justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  footer a{color:var(--muted);text-decoration:none;margin-left:16px}
+  footer a:hover{color:var(--ink)}
+</style>
+
+<header><div class="in">
+  <a class="brand" href="/"><span class="mark"></span>Trinity</a>
+  <nav>
+    <a href="/">Query</a><a href="/nis2">NIS2</a><a href="/docs">API</a>
+    <span class="home"><a href="/" title="Home" aria-label="Home"><span class="mark"></span></a></span>
+  </nav>
+</div></header>
+
+<div class="wrap">
+  <h1>NIS2 Readiness</h1>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true"  data-p="scope">Scope</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="assess">Policy assessment</button>
+  </div>
+
+  <section class="panel" id="p-scope">
+    <label for="sector">Sector</label>
+    <select id="sector"><option value="">Loading…</option></select>
+
+    <div class="row">
+      <div><label for="emp">Employees</label><input id="emp" type="number" min="0" placeholder="120"></div>
+      <div><label for="turn">Turnover (€)</label><input id="turn" type="number" min="0" placeholder="30000000"></div>
+      <div><label for="bal">Balance sheet (€)</label><input id="bal" type="number" min="0" placeholder="20000000"></div>
+    </div>
+
+    <label style="margin-top:20px">Additional criteria</label>
+    <div class="checks" id="flags"></div>
+
+    <button class="go" id="goScope">Check scope</button>
+    <div class="out" id="scopeOut"></div>
+  </section>
+
+  <section class="panel" id="p-assess" hidden>
+    <label for="file">Policy document</label>
+    <input id="file" type="file" accept=".pdf,.txt,.md">
+    <div class="hint">PDF, TXT or MD.</div>
+
+    <p class="or">or</p>
+    <label for="url">Document URL</label>
+    <input id="url" type="url" placeholder="https://example.com/security-policy.pdf">
+
+    <button class="go" id="goAssess">Run assessment</button>
+    <div class="out" id="assessOut"></div>
+  </section>
+</div>
+
+<footer><div class="in">
+  <span>Trinity</span>
+  <span><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></span>
+</div></footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+  $('#p-scope').hidden  = t.dataset.p !== 'scope';
+  $('#p-assess').hidden = t.dataset.p !== 'assess';
+});
+
+// Sector list and Art. 2(2) criteria come from the API so the form cannot drift
+// from the rules the backend applies.
+fetch('/scope/sectors').then(r => r.json()).then(d => {
+  const sel = $('#sector');
+  sel.innerHTML = '<option value="">Select…</option>';
+  for (const [k, lbl] of [['annex_I','Annex I'],['annex_II','Annex II']]) {
+    const g = document.createElement('optgroup'); g.label = lbl;
+    for (const name of Object.keys(d[k].sectors)) {
+      const o = document.createElement('option'); o.value = name;
+      o.textContent = name.replace(/\b\w/g, c => c.toUpperCase());
+      g.appendChild(o);
+    }
+    sel.appendChild(g);
+  }
+  const g = document.createElement('optgroup'); g.label = 'Other';
+  const o = document.createElement('option'); o.value = 'other'; o.textContent = 'Not listed';
+  g.appendChild(o); sel.appendChild(g);
+
+  $('#flags').innerHTML = Object.entries(d.size_exempt_criteria).map(([key, text]) =>
+    `<label><input type="checkbox" data-flag="${esc(key)}"><span>${esc(text.split(' — ')[0])}</span></label>`
+  ).join('');
+});
+
+$('#goScope').onclick = async () => {
+  const btn = $('#goScope'), out = $('#scopeOut');
+  const sector = $('#sector').value;
+  if (!sector) { out.innerHTML = '<p class="err">Select a sector.</p>'; return; }
+  const flags = {};
+  document.querySelectorAll('#flags input').forEach(c => { if (c.checked) flags[c.dataset.flag] = true; });
+  const num = id => $(id).value === '' ? null : Number($(id).value);
+
+  btn.disabled = true; out.innerHTML = '<p><span class="spin"></span>Checking…</p>';
+  try {
+    const r = await fetch('/scope', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({sector, employees:num('#emp'),
+        annual_turnover_eur:num('#turn'), balance_sheet_eur:num('#bal'), flags})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Request failed');
+    const label = {ESSENTIAL:'Essential entity', IMPORTANT:'Important entity',
+      LIKELY_OUT_OF_SCOPE:'Out of scope', OUT_OF_SCOPE:'Out of scope'}[d.classification];
+    out.innerHTML = `
+      <div class="verdict ${esc(d.classification)}">
+        <h2>${esc(label)}</h2>
+        <p>${d.in_scope ? 'NIS2 applies.' : 'NIS2 does not apply on these answers.'}</p>
+      </div>
+      ${d.obligations.length ? `<h3>Obligations</h3><ul>${d.obligations.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <details><summary>Basis for this result</summary>
+        <ul>${d.reasoning.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+        ${d.caveats.length ? `<h3>Caveats</h3><ul>${d.caveats.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+        <p class="hint">${esc(d.disclaimer)} See <a href="/terms">Terms</a>.</p>
+      </details>`;
+  } catch (e) { out.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  finally { btn.disabled = false; }
+};
+
+$('#goAssess').onclick = async () => {
+  const btn = $('#goAssess'), out = $('#assessOut');
+  const f = $('#file').files[0], url = $('#url').value.trim();
+  if (!f && !url) { out.innerHTML = '<p class="err">Add a file or a URL.</p>'; return; }
+
+  btn.disabled = true;
+  out.innerHTML = '<p><span class="spin"></span>Assessing 13 domains — a few minutes.</p>';
+  try {
+    const r = f
+      ? await fetch('/assess', {method:'POST', body:(()=>{const b=new FormData();b.append('file',f);return b;})()})
+      : await fetch('/assess/url', {method:'POST', headers:{'Content-Type':'application/json'},
+                                    body: JSON.stringify({url})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Request failed');
+    out.innerHTML = `
+      <div class="stats">
+        <div><b>${d.coverage_pct}%</b>coverage</div>
+        <div><b>${d.addressed}</b>addressed</div>
+        <div><b>${d.partial}</b>partial</div>
+        <div><b>${d.not_addressed}</b>not addressed</div>
+        <div><b>${d.high_severity_gaps}</b>high severity</div>
+      </div>
+      ${d.findings.map(x=>`
+        <div class="finding">
+          <div class="fhead">
+            <div><span class="fdom">${esc(x.domain)}</span> <span class="art">${esc(x.article)}</span></div>
+            <span class="pill p-${esc(x.status)}">${esc(x.status.replace('_',' '))}</span>
+          </div>
+          <p class="rat">${esc(x.rationale)}</p>
+          ${x.excerpt ? `<blockquote>${esc(x.excerpt)}</blockquote>` : ''}
+        </div>`).join('')}
+      <p class="hint">Assessed with ${esc(d.model || 'local model')}. See <a href="/about">About</a> for method and limits.</p>`;
+  } catch (e) { out.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  finally { btn.disabled = false; }
+};
+</script>

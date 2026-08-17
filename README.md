@@ -58,6 +58,248 @@ Configuration (corpus source, Ollama, Neo4j) lives in `config.py`; secrets in `.
 
 ---
 
+## Tests
+
+```bash
+python -m pytest
+```
+
+95 tests, about a second, and **provably offline** — an autouse fixture in
+`tests/conftest.py` turns any accidental outbound request into a failure. That
+guard is not tidiness: without it an SSRF test can pass for the wrong reason,
+because a blocked host returning 404 raises the same exception as a host that was
+correctly refused.
+
+The suite deliberately covers the parts where being wrong is expensive:
+
+| Area | Why it is tested |
+| --- | --- |
+| `nis2/scope.py` | Legal determinations. Assertions encode the directive's tests, so a refactor that changes an answer fails rather than silently redefining scope. |
+| `verify_excerpt` | The anti-hallucination guarantee. If it accepts text absent from the document, the product's central claim is false. |
+| `nis2/fetch.py` | Ten SSRF vectors, each asserted to be refused *before* any connection is attempted. |
+| API surface | Rejection paths, the catalogues the UI builds itself from, and that no endpoint exposes a Python function name. |
+
+Model-dependent behaviour is **not** here — it belongs in `nis2/benchmark.py`,
+which takes minutes and is scored against labelled ground truth. Mixing the two
+would give a suite too slow to run on every change.
+
+---
+
+## Loop automation
+
+`.claude/loop.md` defines what a bare `/loop` does in this repo: unit suite →
+server health → retrieval regression → assessment regression → Atlas health,
+ordered cheapest-first so a bounded loop reaches the fast checks before spending
+its budget on the slow ones.
+
+This project is better suited to looping than most, because it has verification
+signals an agent cannot fabricate. `eval_questions.json` and
+`nis2/ground_truth.json` are hand-labelled, so an agent cannot quietly make its
+own numbers improve — the usual failure mode where the agent writes both the code
+and the test is much harder here. Both files are therefore protected: the
+`PreToolUse` hook in `.claude/settings.json` blocks edits to them, alongside
+force-pushes, `.env` access, Atlas index drops and unprompted rebuilds.
+
+The reusable half lives at `~/.claude/agents/integration-verifier.md` rather than
+in this repo — it is stack-agnostic and useful in every project. Its load-bearing
+line is `disallowedTools: Write, Edit`: an evaluator that can edit code will
+eventually edit code to make itself pass.
+
+---
+
+## Am I in scope? (`/scope`)
+
+Scope determination is **rule-based with no LLM in the path**. It follows a small
+number of published tests, so a deterministic implementation is reproducible,
+instant, auditable, and cannot hallucinate. Every answer cites the article it
+came from.
+
+```bash
+curl -X POST http://127.0.0.1:8000/scope -H 'Content-Type: application/json' \
+  -d '{"sector":"health","employees":800,"annual_turnover_eur":90000000}'
+```
+
+The tests, in order: **sector** (Annex I or II, Art. 2(1)) → **size-cap
+exemptions** (Art. 2(2) puts DNS/TLD, trust services, public e-comms, sole
+national providers and central government in scope *regardless of size*) →
+**size** (at least medium under Recommendation 2003/361/EC) → **classification**
+(large + Annex I ⇒ essential, otherwise important).
+
+That second test matters more than it sounds. A six-person DNS provider is an
+**essential entity** despite being micro-sized — a size-only checker gets that
+exactly backwards.
+
+Out-of-scope answers still return caveats, because "no" is rarely the end of it:
+Art. 2(2)(d)–(g) contain judgement-based tests no tool can decide for you,
+Member States may extend scope in transposition, and entities in scope must
+impose security requirements on their suppliers (Art. 21(2)(d)) — so the
+obligations often arrive contractually anyway.
+
+---
+
+## NIS2 readiness assessment
+
+Searching public regulation is not a product — a search engine already does it.
+The useful question is the one no search engine can answer, because it needs a
+public regulation *and* a private document read together:
+
+> *Does **our** incident response policy meet the NIS2 reporting requirements?*
+
+`POST /assess` takes a security policy, incident response plan or supplier
+policy and returns a per-domain gap report.
+
+```bash
+curl -F "file=@data/samples/sample_security_policy.txt" \
+     http://127.0.0.1:8000/assess | python -m json.tool
+```
+
+```jsonc
+{
+  "document_name": "sample_security_policy.txt",
+  "coverage_pct": 42.3,
+  "high_severity_gaps": 3,
+  "findings": [
+    {
+      "checkpoint_id": "NIS2-04",
+      "domain": "Business continuity and crisis management",
+      "article": "Art. 21(2)(c)",
+      "status": "PARTIAL",
+      "severity": "MEDIUM",
+      "rationale": "Backups are taken and retained, but the document does not state recovery objectives or evidence of restoration testing.",
+      "excerpt": "Backups of all production servers are taken nightly and retained for 30 days.",
+      "excerpt_verified": true
+    }
+  ]
+}
+```
+
+Assess a single domain with `-F "checkpoints=NIS2-03"`. `GET /assess/checkpoints`
+lists all thirteen with the evidence each expects.
+
+### Linking a document instead of uploading
+
+`POST /assess/url` takes a link. One HTTP fetch covers more sharing methods than
+it first appears — a published policy page, a direct PDF, a Google Drive/Docs
+"anyone with the link" share, a public Notion or Confluence page — all of which
+are just URLs. Drive and Docs links are rewritten to their direct-download form,
+and HTML is reduced to text before assessment.
+
+```bash
+curl -X POST http://127.0.0.1:8000/assess/url -H 'Content-Type: application/json' \
+  -d '{"url":"https://example.com/security-policy.pdf"}'
+```
+
+Provider OAuth (private Drive/SharePoint files) would extend this to documents
+that are not shareable by link, but that is a much larger build and unnecessary
+for the common case.
+
+**This endpoint is an SSRF surface** and is guarded accordingly: only `http(s)`,
+every hostname resolved and rejected if it maps to loopback, private, link-local
+or reserved space, cloud metadata endpoints refused by name, redirects followed
+manually so each hop is re-validated, and the body size-capped while streaming.
+Without those controls, a caller could use the server to reach internal hosts
+they cannot see themselves.
+
+### Browser UI
+
+`GET /nis2` serves a single self-contained page with both tools — the scope
+questionnaire and the policy assessment (upload or link). The sector list and
+the Art. 2(2) criteria are fetched from `/scope/sectors` at load, so the form
+cannot drift out of sync with the rules the backend actually applies.
+
+### Benchmarking the assessment model
+
+Finding quality is model-dependent, so it is measured the same way retrieval is,
+against hand-labelled ground truth in `nis2/ground_truth.json`:
+
+```bash
+python -m nis2.benchmark --models llama3.2 qwen2.5:7b
+```
+
+Three things are scored separately, since a model can be right for the wrong
+reason: **status accuracy**, **gap recall** (of genuinely deficient checkpoints,
+how many escaped being marked ADDRESSED — a false clean bill of health is the
+costly error), and **rationale recall** (did it name the specific omission, such
+as the missing Art. 23 deadlines).
+
+#### Results
+
+| Model | Status accuracy | Gap recall | Rationale recall | Findings quoted | Time |
+| --- | --- | --- | --- | --- | --- |
+| llama3.2 | 69% | 100% | 67% | 62% | 103s |
+| qwen2.5:7b | 23%* | 100% | 67% | 15% | 846s |
+
+**Gap recall is 100% for both**, and it is the metric that matters most: neither
+model ever handed out a false clean bill of health on a checkpoint that was
+genuinely deficient. Errors run toward over-reporting gaps, which costs review
+time rather than creating false assurance.
+
+`llama3.2` is the default: more accurate *and* eight times faster. The bigger
+model is not the better one here.
+
+\* The qwen figure is confounded and should not be read as a judgement
+comparison. It quoted verbatim on only 15% of findings — it paraphrases where
+llama3.2 copies — so the quote-verification rule below fired on most of its
+output. What is being measured there is quoting discipline, not reasoning. A
+fair comparison needs fuzzy quote matching, which is not built yet.
+
+#### What the benchmark changed
+
+The first run scored 38%, and inspecting the misses showed the fault was in the
+rule, not the model. Findings that claimed coverage without a quotable sentence
+were demoted to `UNCLEAR`, but four of the five demotions were checkpoints the
+document genuinely did not address. When a model cannot quote a single
+supporting sentence, the likeliest explanation is that the control is absent —
+not that it is worded ambiguously.
+
+Retargeting the demotion to `NOT_ADDRESSED` lifted status accuracy from **38% to
+69%** with gap recall unchanged at 100%. The cost is visible in the table: the
+document *does* carry an approved, annually-reviewed security policy, and it is
+now reported as a gap because llama3.2 failed to quote it. A false gap costs a
+few minutes of review; a false pass is what makes a compliance tool dangerous.
+
+### Where the checkpoints come from
+
+The thirteen requirement domains are not invented here — they mirror the
+structure ENISA's *Technical Implementation Guidance* (June 2025) uses to
+decompose the risk-management measures of **NIS2 Article 21(2)**, a document
+that is already in the corpus. Every finding can therefore point at a published
+requirement rather than at a checklist we made up.
+
+### Two guarantees that make it usable
+
+**Nothing is stored.** The upload is chunked and embedded into an in-memory
+index that is discarded when the request ends. It never enters the vector store,
+and embeddings and generation both run on local Ollama — no third-party API sees
+the document. For a company being asked to hand over its internal security
+policy, that property matters more than any feature.
+
+**Every quote is verified.** The model is asked for a verbatim excerpt, and the
+excerpt is checked to be a real substring of the upload (whitespace-normalised,
+since PDF extraction breaks lines mid-sentence). Anything invented is dropped.
+
+Further, a finding claiming `ADDRESSED` or `PARTIAL` **without** a verifiable
+quote is demoted to `UNCLEAR` and marked for manual review. This is not
+hypothetical: on a policy containing no cryptography section at all, llama3.2
+returned `PARTIAL — "covers key management (rotation and storage)"`. It could not
+produce a quote, because there was nothing to quote. In compliance a fabricated
+finding is worse than no tool, so unsupported claims are not presented as
+evidence of coverage.
+
+### Limits
+
+- **Not legal advice, and not a compliance certificate.** It surfaces gaps for a
+  human to review.
+- **Model quality is the binding constraint.** llama3.2 (3B) reasons adequately
+  about presence and absence but misses nuance — on the sample it flagged
+  incident handling as `PARTIAL` without noting the missing Art. 23 24h/72h
+  reporting deadlines, which is the most consequential gap in that document. A
+  larger local model (`qwen2.5:7b`) improves this at the cost of speed and RAM.
+- Roughly 13 seconds per checkpoint, so a full thirteen-domain run takes a few
+  minutes on a laptop.
+
+---
+
 ## GraphRAG
 
 The GraphRAG layer adds a **graph database** alongside the vector store so the system can

@@ -1,0 +1,53 @@
+{
+  "$comment": [
+    "Shared project settings, committed. Personal overrides belong in",
+    "settings.local.json, which is gitignored and merges over this file.",
+    "",
+    "No Stop hook here on purpose. A Stop hook that runs the unit suite would be",
+    "cheap and useful, but the checks that actually prove this project works --",
+    "eval.py and nis2/benchmark.py -- take minutes of local LLM time and would make",
+    "every turn unusable. Run those from /loop, which is bounded and asynchronous.",
+    "Add a Stop hook once there is a fast check that is worth blocking on."
+  ],
+
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(python -m pytest *)",
+      "Bash(python -m nis2.benchmark *)",
+      "Bash(python eval.py *)",
+      "Bash(python main.py --mongo-status)",
+      "Read",
+      "Grep",
+      "Glob"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(rm -rf *)"
+    ]
+  },
+
+  "hooks": {
+    "$comment_pretooluse": [
+      "Guardrail for the destructive operations specific to this project.",
+      "continueOnBlock lets Claude explain and pick another approach rather than",
+      "failing the turn outright."
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Judge ONLY the literal command given. Do not block on what a command could hypothetically become, and do not infer an unstated target. If the command names an explicit non-main branch, that branch is the target.\n\nReturn {\"ok\": false, \"reason\": \"blocked: <why>\"} if it does any of the following; otherwise {\"ok\": true}.\n\nIrreversible git: any --force or --force-with-lease push; a push whose explicit target is main or master (`git push origin main`, `git push origin HEAD:main`); a bare `git push` with no branch argument; reset --hard, rebase or filter-branch on already-pushed history. A push naming any other branch (`git push origin feat/x`, `git push -u origin my-branch`) is ALLOWED.\n\nSecrets: printing, copying or committing .env or a credential file; echoing a connection string or password unmasked. Reading .env from application code is fine.\n\nMongoDB Atlas: dropping a database, collection or search index; deleting documents; `main.py --rebuild-mongo`. The free tier allows three search indexes and two are in use, so a dropped index may not be recreatable. Read-only checks like `--mongo-status` are ALLOWED.\n\nBaseline data: writing to nis2/ground_truth.json or eval_questions.json. These are the hand-labelled baselines the benchmarks score against, and editing them to make a check pass destroys the only independent signal the project has. Reading them is ALLOWED.\n\nExpensive rebuilds: `main.py --rebuild-index` or `--rebuild-graph`, each minutes of local embedding.\n\nDestructive filesystem: rm -rf outside a build, cache or temp directory.",
+            "continueOnBlock": true
+          }
+        ]
+      }
+    ]
+  }
+}
