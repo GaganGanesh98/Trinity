@@ -20,6 +20,7 @@ from typing import Any, Callable
 
 from llama_index.core import (
     Document,
+    QueryBundle,
     Settings,
     SimpleDirectoryReader,
     StorageContext,
@@ -68,6 +69,12 @@ RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 _index: VectorStoreIndex | None = None
 _nodes: list | None = None  # kept for BM25 retriever rebuild
+
+# Cross-encoder weights take ~12s to load and the model is stateless, so it is
+# built once per process rather than per query. Corpus-independent, so nothing
+# invalidates it. _bm25 IS corpus-dependent and is cleared whenever _nodes change.
+_reranker: SentenceTransformerRerank | None = None
+_bm25: BM25Retriever | None = None
 
 
 # ── Settings ─────────────────────────────────────────────────────────────────
@@ -234,7 +241,8 @@ def build_index(*, incremental: bool = False) -> VectorStoreIndex:
         incremental: if True and an index already exists, only add new docs
                      via refresh_ref_docs() instead of rebuilding from scratch.
     """
-    global _index, _nodes
+    global _index, _nodes, _bm25
+    _bm25 = None  # corpus is about to change
     _configure_settings()
 
     documents = load_documents()
@@ -269,7 +277,8 @@ def build_index(*, incremental: bool = False) -> VectorStoreIndex:
 
 def load_index() -> VectorStoreIndex:
     """Reload persisted index from disk."""
-    global _index, _nodes
+    global _index, _nodes, _bm25
+    _bm25 = None  # corpus is about to change
     _configure_settings()
     if not RAG_STORE_DIR.exists() or not any(RAG_STORE_DIR.iterdir()):
         raise FileNotFoundError(
@@ -283,14 +292,40 @@ def load_index() -> VectorStoreIndex:
 
 # ── Query ────────────────────────────────────────────────────────────────────
 
-def _build_hybrid_query_engine(index: VectorStoreIndex):
+def get_reranker() -> SentenceTransformerRerank:
+    """The shared cross-encoder reranker, loaded on first use.
+
+    Also used by the Atlas backend, so both score candidates with the same
+    model instance.
     """
-    Hybrid retriever: BM25 + Vector → QueryFusionRetriever → Reranker → LLM.
+    global _reranker
+    if _reranker is None:
+        _reranker = SentenceTransformerRerank(model=RERANK_MODEL, top_n=RERANK_TOP_K)
+    return _reranker
+
+
+def _get_bm25(nodes) -> BM25Retriever:
+    """BM25 over the current corpus, rebuilt only when the corpus changes."""
+    global _bm25
+    if _bm25 is None:
+        _bm25 = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=BM25_TOP_K)
+    return _bm25
+
+
+def _build_hybrid_retriever(index: VectorStoreIndex):
+    """
+    Hybrid retrieval half of the pipeline: BM25 + Vector → QueryFusionRetriever,
+    plus the reranker that trims the fused candidates.
+
+    Split out of _build_hybrid_query_engine() so retrieval can run on its own,
+    without the LLM — see retrieve_sources().
+
+    Returns: (retriever, reranker)
     """
     nodes = _nodes or list(index.docstore.docs.values())
 
     vector_retriever = VectorIndexRetriever(index=index, similarity_top_k=VECTOR_TOP_K)
-    bm25_retriever = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=BM25_TOP_K)
+    bm25_retriever = _get_bm25(nodes)
 
     fusion_retriever = QueryFusionRetriever(
         retrievers=[vector_retriever, bm25_retriever],
@@ -300,11 +335,14 @@ def _build_hybrid_query_engine(index: VectorStoreIndex):
         # crashes when engine.query() runs inside FastAPI's request threadpool
     )
 
-    reranker = SentenceTransformerRerank(
-        model=RERANK_MODEL,
-        top_n=RERANK_TOP_K,
-    )
+    return fusion_retriever, get_reranker()
 
+
+def _build_hybrid_query_engine(index: VectorStoreIndex):
+    """
+    Hybrid retriever: BM25 + Vector → QueryFusionRetriever → Reranker → LLM.
+    """
+    fusion_retriever, reranker = _build_hybrid_retriever(index)
     return RetrieverQueryEngine.from_args(
         retriever=fusion_retriever,
         node_postprocessors=[reranker],
@@ -338,16 +376,16 @@ def query(question: str, *, use_hybrid: bool = True) -> str:
     return (response.response or str(response)).strip()
 
 
-def format_sources(response) -> list[dict]:
+def format_source_nodes(nodes) -> list[dict]:
     """
-    Deduplicate a response's source nodes into citation records.
+    Deduplicate scored nodes into citation records.
 
     Shared with the Atlas backend so both report citations identically — the
     eval harness compares source titles across backends.
     """
     sources: list[dict] = []
     seen = set()
-    for node in response.source_nodes:
+    for node in nodes:
         meta = node.metadata or {}
         title = meta.get("title", "Unknown")
         url = meta.get("source_url", "")
@@ -361,6 +399,47 @@ def format_sources(response) -> list[dict]:
             "score": round(node.score or 0.0, 4),
         })
     return sources
+
+
+def format_sources(response) -> list[dict]:
+    """Citation records for a query response."""
+    return format_source_nodes(response.source_nodes)
+
+
+def retrieve_sources(question: str, *, use_hybrid: bool = True) -> dict:
+    """
+    Retrieval only — same retriever and reranker as query_with_sources(), no LLM.
+
+    Source recall never reads the generated answer, so the eval harness can skip
+    generation entirely. That takes a question from ~60s of local Ollama
+    inference to well under a second, which is what makes an iterate-and-measure
+    loop over retrieval changes practical.
+
+    Ollama must still be running: the query is embedded before it is searched.
+
+    Returns: {"sources": [{"title": ..., "source_url": ..., "score": ...}, ...]}
+    """
+    global _index
+    if _index is None:
+        load_index()
+    assert _index is not None
+
+    reranker = None
+    if use_hybrid:
+        try:
+            retriever, reranker = _build_hybrid_retriever(_index)
+        except Exception as e:
+            logger.warning("Hybrid retriever failed (%s), falling back to vector-only", e)
+            retriever = VectorIndexRetriever(index=_index, similarity_top_k=RERANK_TOP_K)
+    else:
+        retriever = VectorIndexRetriever(index=_index, similarity_top_k=RERANK_TOP_K)
+
+    bundle = QueryBundle(question)
+    nodes = retriever.retrieve(bundle)
+    if reranker is not None:
+        nodes = reranker.postprocess_nodes(nodes, query_bundle=bundle)
+
+    return {"sources": format_source_nodes(nodes)}
 
 
 def query_with_sources(question: str) -> dict:

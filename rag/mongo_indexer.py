@@ -24,9 +24,13 @@ from __future__ import annotations
 import logging
 
 import pymongo
-from llama_index.core import Settings, StorageContext, VectorStoreIndex
+from llama_index.core import (
+    QueryBundle,
+    Settings,
+    StorageContext,
+    VectorStoreIndex,
+)
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
@@ -45,10 +49,10 @@ from rag.indexer import (
     CHUNK_OVERLAP,
     CHUNK_SIZE,
     FUSION_TOP_K,
-    RERANK_MODEL,
-    RERANK_TOP_K,
     _configure_settings,
+    format_source_nodes,
     format_sources,
+    get_reranker,
     load_documents,
 )
 
@@ -207,36 +211,74 @@ def load_index() -> VectorStoreIndex:
 
 # ── Query ────────────────────────────────────────────────────────────────────
 
-def _build_query_engine(index: VectorStoreIndex, *, hybrid: bool):
+def _build_retriever(index: VectorStoreIndex, *, hybrid: bool):
     """
-    Atlas retrieval → cross-encoder reranker → LLM.
+    Atlas-side retrieval, without the reranker or the LLM.
 
     In hybrid mode Atlas runs $vectorSearch and $search in one aggregation
     pipeline and fuses them with Reciprocal Rank Fusion server-side. That is the
     interesting contrast with the local backend, which pulls two candidate sets
     into Python and fuses them there.
 
-    FUSION_TOP_K / RERANK_TOP_K / RERANK_MODEL are imported from the local
-    backend so both pipelines hand the LLM the same number of chunks, chosen by
-    the same reranker.
+    Split out of _build_query_engine() so retrieval can run on its own — see
+    retrieve_sources().
     """
-    retriever = VectorIndexRetriever(
+    return VectorIndexRetriever(
         index=index,
         similarity_top_k=FUSION_TOP_K,
         vector_store_query_mode=(
             VectorStoreQueryMode.HYBRID if hybrid else VectorStoreQueryMode.DEFAULT
         ),
     )
-    reranker = SentenceTransformerRerank(model=RERANK_MODEL, top_n=RERANK_TOP_K)
+
+
+def _build_query_engine(index: VectorStoreIndex, *, hybrid: bool):
+    """
+    Atlas retrieval → cross-encoder reranker → LLM.
+
+    FUSION_TOP_K is imported from the local backend, and get_reranker() returns
+    the same shared cross-encoder instance, so both pipelines hand the LLM the
+    same number of chunks chosen by the same reranker.
+    """
     return RetrieverQueryEngine.from_args(
-        retriever=retriever,
-        node_postprocessors=[reranker],
+        retriever=_build_retriever(index, hybrid=hybrid),
+        node_postprocessors=[get_reranker()],
     )
 
 
 def query(question: str, *, use_hybrid: bool = True) -> str:
     """Run a retrieval-augmented query against Atlas. Mirrors indexer.query()."""
     return query_with_sources(question, use_hybrid=use_hybrid)["answer"]
+
+
+def retrieve_sources(question: str, *, use_hybrid: bool = True) -> dict:
+    """
+    Retrieval only — Atlas search + reranker, no LLM. Mirrors
+    indexer.retrieve_sources() so the eval harness scores both the same way.
+
+    Returns: {"sources": [{"title", "source_url", "score"}, ...]}
+    """
+    global _index
+    if _index is None:
+        load_index()
+    assert _index is not None
+
+    bundle = QueryBundle(question)
+    retriever = _build_retriever(_index, hybrid=use_hybrid)
+    try:
+        nodes = retriever.retrieve(bundle)
+    except Exception as e:
+        if not use_hybrid:
+            raise
+        # Same fallback as query_with_sources(): hybrid needs the full-text
+        # index, and a missing or still-building one fails the whole query.
+        logger.warning("Atlas hybrid retrieval failed (%s) — retrying vector-only", e)
+        retriever = _build_retriever(_index, hybrid=False)
+        nodes = retriever.retrieve(bundle)
+
+    nodes = get_reranker().postprocess_nodes(nodes, query_bundle=bundle)
+
+    return {"sources": format_source_nodes(nodes)}
 
 
 def query_with_sources(question: str, *, use_hybrid: bool = True) -> dict:
