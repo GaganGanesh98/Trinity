@@ -179,6 +179,31 @@ python eval.py --backend atlas
 python eval.py --backend all --out results.json   # both + markdown table
 ```
 
+### Retrieval-only mode
+
+`--retrieval-only` runs the same retriever and reranker but skips the LLM:
+
+```bash
+python eval.py --retrieval-only
+python eval.py --backend all --retrieval-only --out results.json
+```
+
+Source recall never reads the generated answer, so generation is pure cost when
+that is the metric you care about. Measured on the sample corpus: **~62s per
+question** with generation, **~0.8s warm** without — the full 5-question set
+drops from roughly five minutes to about fifteen seconds. Answer recall is
+reported as `n/a` (and `null` in the JSON), and the latency column becomes
+retrieval time rather than end-to-end time.
+
+That makes this the mode to use when iterating on retrieval: chunking, top-k,
+fusion weights, reranker choice. Use the full run to confirm a change before
+recording it.
+
+The reranker and the BM25 index are now built once per process instead of once
+per query — the cross-encoder alone costs ~12s to load, which previously landed
+on every single query. The first query in a process still pays that; subsequent
+ones do not.
+
 ### Results
 
 Both backends, `eval_questions.json` (5 questions, 7 expected answer strings):
